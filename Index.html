@@ -13,10 +13,10 @@
   <title>Jobcards</title>
 
   <!-- PWA Manifest (inline data URI) -->
-  <link rel="manifest" href="data:application/json;charset=utf-8,%7B%22name%22%3A%22Jobcard%20Management%22%2C%22short_name%22%3A%22Jobcards%22%2C%22start_url%22%3A%22.%2F%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23f0ebe0%22%2C%22theme_color%22%3A%22%23f0ebe0%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22data%3Aimage%2Fsvg%2Bxml%2C%253Csvg%2520xmlns%253D%2527http%253A%252F%252Fwww.w3.org%252F2000%252Fsvg%2527%2520viewBox%253D%25270%25200%2520192%2520192%2527%253E%253Crect%2520width%253D%2527192%2527%2520height%253D%2527192%2527%2520fill%253D%2527%2523f0ebe0%2527%252F%253E%253Ctext%2520x%253D%252796%2527%2520y%253D%2527130%2527%2520font-size%253D%2527120%2527%2520text-anchor%253D%2527middle%2527%2520font-family%253D%2527serif%2527%253E%25E7%25A5%25A8%253C%252Ftext%253E%253C%252Fsvg%253E%22%2C%22sizes%22%3A%22192x192%22%2C%22type%22%3A%22image%2Fsvg%2Bxml%22%7D%5D%7D"/>
+  <link rel="manifest" href="data:application/json;charset=utf-8,%7B%22name%22%3A%22Jobcard%20Management%22%2C%22short_name%22%3A%22Jobcards%22%2C%22start_url%22%3A%22.%2F%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23f0ebe0%22%2C%22theme_color%22%3A%22%23f0ebe0%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22data%3Aimage%2Fsvg%2Bxml%2C%253Csvg%2520xmlns%253D%2527http%253A%252F%252Fwww.w3.org%252F2000%252Fsvg%2527%2520viewBox%253D%25270%25200%2520192%2520192%2527%253E%253Crect%2520width%253D%2527192%2527%2520height%253D%2527192%2527%2520fill%253D%2527%2523f0ebe0%2527%252F%253E%253Ctext%2520x%253D%252796%2527%2520y%253D%2527125%2527%2520font-size%253D%252772%2527%2520text-anchor%253D%2527middle%2527%2520font-family%253D%2527serif%2527%2520font-weight%253D%2527300%2527%2520fill%253D%2527%25231c1a18%2527%253EJC%253C%252Ftext%253E%253C%252Fsvg%253E%22%2C%22sizes%22%3A%22192x192%22%2C%22type%22%3A%22image%2Fsvg%2Bxml%22%7D%5D%7D"/>
 
   <!-- Apple touch icon -->
-  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect width='180' height='180' rx='40' fill='%23f0ebe0'/><text x='90' y='130' font-size='110' text-anchor='middle' font-family='serif' fill='%231c1a18'>票</text></svg>"/>
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect width='180' height='180' rx='40' fill='%23f0ebe0'/><text x='90' y='125' font-size='78' text-anchor='middle' font-family='serif' font-weight='300' fill='%231c1a18'>JC</text></svg>"/>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin></script>
@@ -226,6 +226,8 @@
 
     const load = (key, def) => { try { const s=localStorage.getItem(key); return s?JSON.parse(s):def; } catch { return def; } };
     const save = (key, val) => { try { localStorage.setItem(key,JSON.stringify(val)); } catch {} };
+    const isPWA = () => window.matchMedia('(display-mode: standalone)').matches || !!window.navigator.standalone;
+    const SESSION_KEY = isPWA() ? "jc-pwa-session" : "jc-session";
     const today   = () => new Date().toISOString().slice(0,10);
     const fmtDate = d  => new Date(d).toLocaleDateString("en-GB",{year:"numeric",month:"2-digit",day:"2-digit"});
     const overdue = (due,st) => st!=="Completed" && new Date(due)<new Date();
@@ -620,8 +622,8 @@
       const [cForm,setCForm]  = useState({arrivedAt:"",metWith:"",workCompleted:[""],workRemaining:[""],additionalNotes:""});
       const [cErrs,setCErrs]  = useState({});
       const [users,setUsersRaw]     = useState(()=>load("jc-users",[]));
-      const [session,setSessionRaw] = useState(()=>load("jc-session",null));
-      const setSession = s=>{setSessionRaw(s);save("jc-session",s);};
+      const [session,setSessionRaw] = useState(()=>load(SESSION_KEY,null));
+      const setSession = s=>{setSessionRaw(s);save(SESSION_KEY,s);};
       const setUsersStore = u=>{setUsersRaw(u);save("jc-users",u);};
       const uid = useRef(load("jc-uid",5));
       const [tab,setTab]         = useState("list");
