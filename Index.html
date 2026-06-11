@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <meta name="theme-color" content="#f0ebe0" media="(prefers-color-scheme: light)"/>
+  <meta name="theme-color" content="#181614" media="(prefers-color-scheme: dark)"/>
+  <meta name="description" content="Wabi-Sabi Jobcard Management — track and complete work orders"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+  <meta name="apple-mobile-web-app-title" content="Jobcards"/>
+  <title>Jobcards</title>
+
+  <!-- PWA Manifest (inline data URI) -->
+  <link rel="manifest" href="data:application/json;charset=utf-8,%7B%22name%22%3A%22Jobcard%20Management%22%2C%22short_name%22%3A%22Jobcards%22%2C%22start_url%22%3A%22.%2F%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23f0ebe0%22%2C%22theme_color%22%3A%22%23f0ebe0%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22data%3Aimage%2Fsvg%2Bxml%2C%253Csvg%2520xmlns%253D%2527http%253A%252F%252Fwww.w3.org%252F2000%252Fsvg%2527%2520viewBox%253D%25270%25200%2520192%2520192%2527%253E%253Crect%2520width%253D%2527192%2527%2520height%253D%2527192%2527%2520fill%253D%2527%2523f0ebe0%2527%252F%253E%253Ctext%2520x%253D%252796%2527%2520y%253D%2527130%2527%2520font-size%253D%2527120%2527%2520text-anchor%253D%2527middle%2527%2520font-family%253D%2527serif%2527%253E%25E7%25A5%25A8%253C%252Ftext%253E%253C%252Fsvg%253E%22%2C%22sizes%22%3A%22192x192%22%2C%22type%22%3A%22image%2Fsvg%2Bxml%22%7D%5D%7D"/>
+
+  <!-- Apple touch icon -->
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect width='180' height='180' rx='40' fill='%23f0ebe0'/><text x='90' y='130' font-size='110' text-anchor='middle' font-family='serif' fill='%231c1a18'>票</text></svg>"/>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js" crossorigin></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin></script>
+
+  <style>
+    html,body{margin:0;padding:0;height:100%;overflow-x:hidden;}
+    #root{min-height:100vh;}
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- Service Worker registered via blob -->
+  <script>
+    if('serviceWorker' in navigator){
+      const SW=`
+        const CACHE='jc-pwa-v1';
+        self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll([]))); self.skipWaiting();});
+        self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(ks=>Promise.all(ks.filter(k=>k!==CACHE).map(k=>caches.delete(k))))); self.clients.claim();});
+        self.addEventListener('fetch',e=>{
+          const u=new URL(e.request.url);
+          if(u.origin===location.origin){
+            e.respondWith(fetch(e.request).catch(()=>caches.match(e.request)));
+          } else {
+            e.respondWith(caches.match(e.request).then(c=>{
+              if(c)return c;
+              return fetch(e.request).then(r=>{const cl=r.clone();caches.open(CACHE).then(ca=>ca.put(e.request,cl));return r;});
+            }));
+          }
+        });
+      `;
+      const blob=new Blob([SW],{type:'application/javascript'});
+      navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(console.error);
+    }
+  </script>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    /* ── CSS ─────────────────────────────────────────────────────────────── */
+    const WS = () => (
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400;700&family=Noto+Sans+JP:wght@300;400;500&display=swap');
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+        .ws-root{
+          --sumi:#1c1a18;--ash:#2e2c28;--washi:#f0ebe0;--shiro:#f7f4ee;
+          --tsuchi:#c8b89a;--nori:#7a6e5e;--aka:#8b3a2a;--matcha:#4e6846;
+          --indigo:#374a6a;--ki:#8b7228;--trans:all 0.35s ease;
+          --bg:#f0ebe0;--card-bg:#f7f4ee;--card-border:#c8b89a;
+          --card-shadow:rgba(28,26,24,0.06);--text-pri:#1c1a18;--text-sec:#7a6e5e;
+          --text-dim:#c8b89a;--stroke-col:#1c1a18;--modal-bg:rgba(240,235,224,0.88);
+          --input-bg:#f7f4ee;--toggle-bg:#c8b89a;--toggle-knob:#f7f4ee;
+        }
+        .ws-root.dark{
+          --sumi:#e8e0d0;--ash:#d0c8b8;--washi:#181614;--shiro:#211f1c;
+          --tsuchi:#4a3e2e;--nori:#7a7060;--aka:#c0584a;--matcha:#6a9060;
+          --indigo:#5a7aaa;--ki:#b09840;--trans:all 0.35s ease;
+          --bg:#181614;--card-bg:#211f1c;--card-border:#3a3228;
+          --card-shadow:rgba(0,0,0,0.28);--text-pri:#e8e0d0;--text-sec:#8a8070;
+          --text-dim:#4a3e2e;--stroke-col:#c8b89a;--modal-bg:rgba(20,18,16,0.92);
+          --input-bg:#2a2520;--toggle-bg:#3a3228;--toggle-knob:#c8b89a;
+        }
+        body{background:var(--bg,#f0ebe0);transition:background 0.35s ease;}
+        .washi-bg{
+          background-color:var(--bg);
+          background-image:
+            url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E"),
+            repeating-linear-gradient(92deg,transparent,transparent 120px,rgba(128,110,80,0.04) 120px,rgba(128,110,80,0.04) 121px),
+            repeating-linear-gradient(180deg,transparent,transparent 80px,rgba(128,110,80,0.03) 80px,rgba(128,110,80,0.03) 81px);
+          transition:background-color 0.35s ease;min-height:100vh;
+        }
+        .ws-card{background:var(--card-bg);border:1px solid var(--card-border);box-shadow:inset 0 1px 0 rgba(255,255,255,0.04),0 1px 4px var(--card-shadow),0 4px 20px var(--card-shadow);transition:var(--trans);}
+        .ws-card-hover:hover{border-color:var(--nori);box-shadow:inset 0 1px 0 rgba(255,255,255,0.04),0 2px 12px var(--card-shadow),0 8px 32px var(--card-shadow);transform:translateY(-1px);cursor:pointer;}
+        .ws-input{width:100%;background:var(--input-bg);border:1px solid var(--card-border);border-radius:2px;padding:11px 14px;font-family:'Noto Sans JP',sans-serif;font-size:14px;font-weight:300;color:var(--text-pri);outline:none;transition:var(--trans);box-shadow:inset 0 1px 3px rgba(0,0,0,0.06);}
+        .ws-input:focus{border-color:var(--nori);box-shadow:inset 0 1px 3px rgba(0,0,0,0.1),0 0 0 2px rgba(122,110,94,0.14);}
+        .ws-input::placeholder{color:var(--text-dim);}
+        .ws-input option{background:var(--input-bg);color:var(--text-pri);}
+        select.ws-input{appearance:none;-webkit-appearance:none;text-align:center;text-align-last:center;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpolyline points='1,1 5,5 9,1' fill='none' stroke='%237a6e5e' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;background-size:10px 6px;padding-right:30px!important;padding-left:30px!important;}
+        select.ws-input option{text-align:center;}
+        .ws-btn-primary{background:var(--text-pri);color:var(--bg);border:1px solid var(--text-pri);padding:12px 28px;font-family:'Noto Sans JP',sans-serif;font-size:12px;font-weight:500;letter-spacing:0.12em;cursor:pointer;border-radius:1px;transition:var(--trans);}
+        .ws-btn-primary:hover{opacity:0.85;}
+        .ws-btn-ghost{background:transparent;color:var(--text-sec);border:1px solid var(--card-border);padding:10px 22px;font-family:'Noto Sans JP',sans-serif;font-size:12px;font-weight:400;letter-spacing:0.08em;cursor:pointer;border-radius:1px;transition:var(--trans);}
+        .ws-btn-ghost:hover{border-color:var(--nori);color:var(--text-pri);}
+        .ws-btn-danger{background:transparent;color:var(--aka);border:1px solid rgba(139,58,42,0.35);padding:10px 22px;font-family:'Noto Sans JP',sans-serif;font-size:12px;font-weight:400;letter-spacing:0.08em;cursor:pointer;border-radius:1px;transition:var(--trans);}
+        .ws-btn-danger:hover{border-color:var(--aka);background:rgba(139,58,42,0.08);}
+        .ws-pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:1px;font-family:'Noto Sans JP',sans-serif;font-size:10px;font-weight:500;letter-spacing:0.1em;white-space:nowrap;}
+        .ws-seal{display:inline-flex;align-items:center;justify-content:center;border:1.5px solid currentColor;border-radius:50%;font-family:'Noto Serif JP',serif;font-weight:700;}
+        .ws-back{background:none;border:none;color:var(--text-sec);font-family:'Noto Sans JP',sans-serif;font-size:12px;letter-spacing:0.1em;cursor:pointer;padding:0;transition:color 0.2s;}
+        .ws-back:hover{color:var(--text-pri);}
+        .ws-toggle-track{width:44px;height:24px;background:var(--toggle-bg);border-radius:12px;border:1px solid var(--card-border);position:relative;cursor:pointer;transition:var(--trans);flex-shrink:0;}
+        .ws-toggle-knob{width:16px;height:16px;background:var(--toggle-knob);border-radius:50%;position:absolute;top:3px;left:3px;transition:transform 0.3s ease,background 0.3s ease;box-shadow:0 1px 4px rgba(0,0,0,0.2);}
+        .ws-toggle-knob.on{transform:translateX(20px);}
+        @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes inkDrop{from{opacity:0;transform:scale(0.96)}to{opacity:1;transform:scale(1)}}
+        @keyframes slideRight{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:translateX(0)}}
+        .anim-fade{animation:fadeUp 0.5s ease both;}
+        .anim-ink{animation:inkDrop 0.4s ease both;}
+        .anim-slide{animation:slideRight 0.35s ease both;}
+        ::-webkit-scrollbar{width:4px;}
+        ::-webkit-scrollbar-track{background:var(--bg);}
+        ::-webkit-scrollbar-thumb{background:var(--tsuchi);border-radius:2px;}
+        .install-banner{position:fixed;bottom:0;left:0;right:0;z-index:2000;background:var(--card-bg);border-top:1px solid var(--card-border);padding:16px 20px;display:flex;align-items:center;gap:14px;box-shadow:0 -4px 24px rgba(0,0,0,0.12);padding-bottom:calc(16px + env(safe-area-inset-bottom,0px));animation:fadeUp 0.4s ease both;}
+        .install-icon{width:44px;height:44px;border-radius:10px;background:var(--washi);border:1px solid var(--card-border);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;font-family:serif;}
+        .offline-badge{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:1500;background:var(--aka);color:#fff;padding:6px 16px;border-radius:20px;font-family:'Noto Sans JP',sans-serif;font-size:11px;letter-spacing:0.08em;box-shadow:0 4px 16px rgba(0,0,0,0.2);}
+        @media(max-width:600px){
+          .ws-btn-primary,.ws-btn-ghost,.ws-btn-danger{padding:14px 20px;min-height:48px;}
+          .ws-input{font-size:16px!important;}
+          .stat-grid{grid-template-columns:repeat(3,1fr)!important;}
+          .stat-grid>div{padding:12px 8px!important;}
+          .stat-grid>div>div:nth-child(2){font-size:28px!important;}
+          .stat-grid>div>div:nth-child(3){font-size:8px!important;}
+          .form-grid{grid-template-columns:1fr!important;}
+          .detail-meta{grid-template-columns:1fr 1fr!important;}
+          .nav-actions{flex-wrap:wrap;gap:8px!important;}
+          .cal-toolbar{flex-direction:column;align-items:flex-start!important;}
+          .cal-period{font-size:12px!important;width:100%;}
+          .cal-scroll{max-height:calc(100vh - 380px)!important;}
+        }
+        .tab-bar{display:flex;border-bottom:2px solid var(--card-border);margin-bottom:32px;}
+        .tab-btn{padding:10px 20px;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Noto Sans JP',sans-serif;font-size:10px;letter-spacing:0.14em;color:var(--text-sec);text-transform:uppercase;transition:all 0.2s;}
+        .tab-btn.active{color:var(--text-pri);border-bottom-color:var(--sumi);}
+        .tab-btn:hover:not(.active){color:var(--text-pri);}
+        .cal-wrap{display:flex;flex-direction:column;gap:16px;}
+        .cal-toolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+        .cal-nav{display:flex;align-items:center;gap:6px;}
+        .cal-nav-btn{background:none;border:1px solid var(--card-border);border-radius:2px;padding:7px 13px;cursor:pointer;color:var(--text-pri);font-family:'Noto Sans JP',sans-serif;font-size:11px;letter-spacing:0.06em;transition:var(--trans);}
+        .cal-nav-btn:hover{border-color:var(--nori);}
+        .cal-period{font-family:'Noto Serif JP',serif;font-size:13px;font-weight:400;color:var(--text-pri);letter-spacing:0.04em;}
+        .cal-view-toggle{display:flex;gap:4px;}
+        .cal-view-btn{padding:7px 14px;font-size:10px;font-family:'Noto Sans JP',sans-serif;letter-spacing:0.1em;border:1px solid var(--card-border);border-radius:1px;cursor:pointer;background:none;color:var(--text-sec);transition:var(--trans);}
+        .cal-view-btn.active{background:var(--sumi);color:var(--washi);border-color:var(--sumi);}
+        .cal-grid-outer{border:1px solid var(--card-border);border-radius:2px;overflow:hidden;background:var(--card-bg);}
+        .cal-day-hdr{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 4px;border-bottom:1px solid var(--card-border);gap:3px;}
+        .cal-day-hdr.today{background:rgba(122,110,94,0.07);}
+        .cal-day-name{font-family:'Noto Sans JP',sans-serif;font-size:8px;letter-spacing:0.14em;color:var(--text-sec);text-transform:uppercase;}
+        .cal-day-num{font-family:'Noto Serif JP',serif;font-size:15px;font-weight:300;color:var(--text-pri);line-height:1;}
+        .cal-day-num.today-num{width:26px;height:26px;background:var(--sumi);color:var(--washi);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;}
+        .cal-scroll{overflow-y:auto;max-height:calc(100vh - 320px);min-height:280px;}
+        .cal-time-cell{height:60px;display:flex;align-items:flex-start;justify-content:flex-end;padding-right:8px;}
+        .cal-time-lbl{font-family:'Noto Sans JP',sans-serif;font-size:9px;color:var(--text-dim);letter-spacing:0.04em;margin-top:-6px;}
+        .cal-slot{height:60px;border-bottom:1px solid var(--card-border);position:relative;}
+        .cal-slot-half{position:absolute;top:50%;left:0;right:0;border-top:1px dashed rgba(200,184,154,0.4);}
+        .cal-event{position:absolute;left:2px;right:2px;border-radius:2px;padding:3px 5px;overflow:hidden;cursor:pointer;transition:opacity 0.15s;}
+        .cal-event:hover{opacity:0.75;}
+        .cal-event-title{font-family:'Noto Sans JP',sans-serif;font-size:9px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.3;}
+        .cal-event-sub{font-family:'Noto Sans JP',sans-serif;font-size:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:0.75;margin-top:1px;}
+        .cal-now-line{position:absolute;left:0;right:0;height:2px;background:var(--aka);z-index:2;pointer-events:none;}
+        .cal-now-dot{position:absolute;left:-4px;top:-3px;width:7px;height:7px;background:var(--aka);border-radius:50%;}
+        .ck-num{cursor:pointer;transition:opacity 0.15s;}
+        .ck-num:hover{opacity:0.7;}
+        .ck-hh-btn{background:none;border:none;cursor:pointer;font-family:'Noto Serif JP',serif;font-size:32px;font-weight:300;letter-spacing:0.04em;color:var(--text-pri);padding:0 6px 4px;line-height:1.1;transition:color 0.2s;}
+        .cs-wrap{position:relative;display:flex;flex:1 1 auto;}
+        .cs-btn{display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;width:100%;background:var(--input-bg);border:1px solid var(--card-border);border-radius:2px;padding:11px 14px;font-family:'Noto Sans JP',sans-serif;font-size:14px;font-weight:300;color:var(--text-pri);transition:var(--trans);outline:none;box-shadow:inset 0 1px 3px rgba(0,0,0,0.06);}
+        .cs-btn:hover,.cs-btn:focus{border-color:var(--nori);box-shadow:inset 0 1px 3px rgba(0,0,0,0.1),0 0 0 2px rgba(122,110,94,0.14);}
+        .cs-list{position:absolute;top:calc(100% + 2px);left:0;right:0;z-index:500;background:var(--card-bg);border:1px solid var(--card-border);border-radius:2px;box-shadow:0 8px 24px var(--card-shadow);overflow-y:auto;max-height:220px;animation:fadeUp 0.15s ease both;}
+        .cs-item{padding:11px 16px;font-family:'Noto Sans JP',sans-serif;font-size:13px;font-weight:300;color:var(--text-pri);cursor:pointer;transition:background 0.12s;display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:0.04em;}
+        .cs-item:hover{background:rgba(122,110,94,0.07);}
+        .cs-item.sel{font-weight:500;}
+        .si-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:28px;}
+      `}</style>
+    );
+
+    /* ── SVG decoratives ─────────────────────────────────────────────────── */
+    const BrushStroke = ({ style={}, variant=0 }) => {
+      const paths=["M 8 12 Q 60 6 140 11 Q 220 16 290 10 Q 330 7 360 11","M 4 14 Q 80 8 180 13 Q 250 17 320 11 Q 345 9 368 13","M 12 11 Q 90 15 170 10 Q 240 6 310 12 Q 340 14 370 10"];
+      const ws=[1.2,1.8,0.9]; const ops=[0.18,0.14,0.2]; const v=variant%3;
+      return (<svg viewBox="0 0 376 20" style={{width:"100%",height:20,display:"block",...style}}><path d={paths[v]} stroke="var(--stroke-col,#1c1a18)" strokeWidth={ws[v]} fill="none" strokeLinecap="round" opacity={ops[v]}/></svg>);
+    };
+
+    const InkBlot = ({ size=28, opacity=0.06, style={} }) => (
+      <svg viewBox="0 0 60 60" style={{width:size,height:size,...style}}>
+        <ellipse cx="30" cy="32" rx="22" ry="18" fill="#1c1a18" opacity={opacity} transform="rotate(-12 30 30)"/>
+        <ellipse cx="28" cy="30" rx="14" ry="10" fill="#1c1a18" opacity={opacity*0.5} transform="rotate(8 30 30)"/>
+        <circle cx="38" cy="26" r="5" fill="#1c1a18" opacity={opacity*0.4}/>
+        <circle cx="20" cy="38" r="3" fill="#1c1a18" opacity={opacity*0.3}/>
+      </svg>
+    );
+
+    const Mon = ({ priority }) => {
+      const m={Low:{color:"#7a6e5e",char:"L",label:"LOW"},Medium:{color:"#374a6a",char:"M",label:"MED"},High:{color:"#8b7228",char:"H",label:"HIGH"},Critical:{color:"#8b3a2a",char:"C",label:"CRIT"}};
+      const cfg=m[priority]||m.Low;
+      return (<div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:4}}><div className="ws-seal" style={{width:36,height:36,color:cfg.color,fontSize:14,fontFamily:"'Noto Sans JP',sans-serif",fontWeight:700}}>{cfg.char}</div><span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:8,letterSpacing:"0.14em",color:cfg.color,fontWeight:500}}>{cfg.label}</span></div>);
+    };
+
+    const SC={
+      Outstanding:{color:"#8b3a2a",bg:"rgba(139,58,42,0.08)",border:"rgba(139,58,42,0.25)",dot:"#8b3a2a"},
+      "In Progress":{color:"#374a6a",bg:"rgba(55,74,106,0.08)",border:"rgba(55,74,106,0.25)",dot:"#374a6a"},
+      "On Hold":{color:"#8b7228",bg:"rgba(139,114,40,0.08)",border:"rgba(139,114,40,0.25)",dot:"#8b7228"},
+      Completed:{color:"#4e6846",bg:"rgba(78,104,70,0.08)",border:"rgba(78,104,70,0.25)",dot:"#4e6846"},
+    };
+
+    const Pill = ({ status }) => { const c=SC[status]; return (<span className="ws-pill" style={{background:c.bg,border:`1px solid ${c.border}`,color:c.color}}><span style={{width:5,height:5,borderRadius:"50%",background:c.dot,display:"inline-block",flexShrink:0}}/>{status}</span>); };
+
+    /* ── Data ────────────────────────────────────────────────────────────── */
+    const PRIS=["Low","Medium","High","Critical"];
+    const CATS=["Maintenance","Repair","Installation","Inspection","Electrical","Plumbing","Other"];
+    const STATS=["Outstanding","In Progress","On Hold","Completed"];
+
+    const SEED=[
+      {id:1,title:"Replace HVAC Filter — Unit B3",category:"Maintenance",priority:"High",status:"Outstanding",assignee:"Marcus Chen",location:"Building B, Floor 3",created:"2026-06-01",due:"2026-06-07",description:"Monthly filter replacement overdue. Air quality reports flagging elevated particulates."},
+      {id:2,title:"Fix Leaking Pipe, Restroom 2F",category:"Plumbing",priority:"Critical",status:"In Progress",assignee:"Sandra Okafor",location:"Building A, Floor 2",created:"2026-06-03",due:"2026-06-05",description:"Persistent leak behind sink. Water pooling on floor creating slip hazard."},
+      {id:3,title:"Annual Fire Suppression Inspection",category:"Inspection",priority:"Medium",status:"Outstanding",assignee:"Unassigned",location:"All Zones",created:"2026-05-28",due:"2026-06-15",description:"Mandatory annual compliance inspection for all fire suppression systems."},
+      {id:4,title:"New Lighting Install, Parking Level P2",category:"Electrical",priority:"Low",status:"On Hold",assignee:"Tom Reeves",location:"Parking Level P2",created:"2026-05-20",due:"2026-06-20",description:"Upgrade to LED fixtures. On hold — awaiting delivery."},
+    ];
+
+    const load = (key, def) => { try { const s=localStorage.getItem(key); return s?JSON.parse(s):def; } catch { return def; } };
+    const save = (key, val) => { try { localStorage.setItem(key,JSON.stringify(val)); } catch {} };
+    const today   = () => new Date().toISOString().slice(0,10);
+    const fmtDate = d  => new Date(d).toLocaleDateString("en-GB",{year:"numeric",month:"2-digit",day:"2-digit"});
+    const overdue = (due,st) => st!=="Completed" && new Date(due)<new Date();
+    const hashPw  = async (pw,em) => {
+      try {
+        const d=new TextEncoder().encode(pw+"|"+em.toLowerCase());
+        const h=await crypto.subtle.digest("SHA-256",d);
+        return Array.from(new Uint8Array(h)).map(b=>b.toString(16).padStart(2,"0")).join("");
+      } catch { return btoa(pw+"|"+em.toLowerCase()); }
+    };
+
+    /* ── Shared UI ───────────────────────────────────────────────────────── */
+    const FL = ({c}) => <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.16em",color:"var(--text-sec)",fontWeight:500,textTransform:"uppercase",marginBottom:7}}>{c}</div>;
+    const SL = ({children,s=0}) => (
+      <div style={{marginBottom:18}}>
+        <div style={{display:"flex",alignItems:"baseline",gap:12,marginBottom:8}}>
+          <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.18em",color:"var(--text-sec)",fontWeight:500,textTransform:"uppercase"}}>{children}</span>
+        </div>
+        <BrushStroke variant={s}/>
+      </div>
+    );
+
+    const StatTile = ({label,count,color,onClick}) => (
+      <div className="ws-card ws-card-hover anim-fade" onClick={onClick} style={{padding:"24px 20px",borderRadius:2,position:"relative",overflow:"hidden",cursor:"pointer"}}>
+        <InkBlot size={60} opacity={0.04} style={{position:"absolute",right:-8,bottom:-8}}/>
+        <div style={{fontFamily:"'Noto Serif JP',serif",fontSize:42,fontWeight:300,color,lineHeight:1,marginBottom:10}}>{count}</div>
+        <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.16em",color:"var(--text-sec)",textTransform:"uppercase"}}>{label}</div>
+        <div style={{position:"absolute",bottom:0,left:0,width:"100%",height:2,background:color,opacity:0.3}}/>
+      </div>
+    );
+
+    const JobRow = ({job,onClick,delay=0}) => {
+      const sc=SC[job.status]; const ov=overdue(job.due,job.status);
+      return (
+        <div className="ws-card ws-card-hover anim-fade" onClick={onClick} style={{padding:"20px 24px",borderRadius:2,display:"flex",alignItems:"flex-start",gap:20,animationDelay:`${delay}ms`,borderLeft:`2px solid ${sc.dot}`}}>
+          <Mon priority={job.priority}/>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:10,flexWrap:"wrap"}}>
+              <span style={{fontFamily:"'Noto Serif JP',serif",fontSize:15,fontWeight:400,color:"var(--text-pri)",letterSpacing:"0.01em",lineHeight:1.4}}>{job.title}</span>
+              <Pill status={job.status}/>
+            </div>
+            <div style={{display:"flex",gap:20,flexWrap:"wrap"}}>
+              {[job.category,job.location,job.assignee||"Unassigned",ov?"⚠ Overdue":fmtDate(job.due)].map((m,i)=>(
+                <span key={i} style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,color:i===3&&ov?"var(--aka)":"var(--text-sec)",fontWeight:300,letterSpacing:"0.04em"}}>{m}</span>
+              ))}
+            </div>
+          </div>
+          <span style={{color:"var(--text-dim)",fontSize:18,marginTop:4,flexShrink:0,fontWeight:300}}>—</span>
+        </div>
+      );
+    };
+
+    const FG = ({label,error,children,full=false}) => (
+      <div style={{gridColumn:full?"1/-1":undefined}}>
+        <FL c={label}/>
+        {children}
+        {error&&<div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,color:"var(--aka)",marginTop:5}}>* {error}</div>}
+      </div>
+    );
+
+    /* ── Stable components (outside App so input focus survives re-renders) ── */
+    const CustomSelect = ({value, onChange, options, style}) => {
+      const [open, setOpen] = useState(false);
+      const ref = useRef(null);
+      useEffect(()=>{
+        if(!open)return;
+        const h=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);};
+        document.addEventListener("mousedown",h); document.addEventListener("touchstart",h);
+        return()=>{document.removeEventListener("mousedown",h);document.removeEventListener("touchstart",h);};
+      },[open]);
+      const opts=options.map(o=>typeof o==="string"?{value:o,label:o}:o);
+      const sel=opts.find(o=>o.value===value)||opts[0];
+      return (
+        <div ref={ref} className="cs-wrap" style={style}>
+          <button className="cs-btn" onClick={()=>setOpen(o=>!o)}>
+            <span>{sel?.label}</span>
+            <svg width="10" height="6" viewBox="0 0 10 6" style={{transform:open?"rotate(180deg)":"none",transition:"transform 0.2s",flexShrink:0}}><polyline points="1,1 5,5 9,1" fill="none" stroke="var(--text-dim)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </button>
+          {open&&(
+            <div className="cs-list">
+              {opts.map(o=>(
+                <div key={o.value} className={`cs-item${value===o.value?" sel":""}`} onClick={()=>{onChange(o.value);setOpen(false);}}>
+                  {value===o.value&&<span style={{color:"var(--nori)",fontSize:11,flexShrink:0}}>✓</span>}
+                  {o.label}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    const SignIn = ({users, onSignIn, onRegister}) => {
+      const dark = load("jc-dark",false);
+      const [mode, setMode] = useState(users.length===0?"register":"login");
+      const [email, setEmail] = useState("");
+      const [name,  setName]  = useState("");
+      const [pw,    setPw]    = useState("");
+      const [err,   setErr]   = useState("");
+      const [busy,  setBusy]  = useState(false);
+      const submit = async () => {
+        if(!email.trim()||!pw.trim()){setErr("All fields are required");return;}
+        if(mode==="register"&&!name.trim()){setErr("Name is required");return;}
+        setBusy(true); setErr("");
+        const e=mode==="login"?await onSignIn(email.trim(),pw):await onRegister(email.trim(),name.trim(),pw);
+        setBusy(false); if(e)setErr(e);
+      };
+      return (
+        <div className={`ws-root${dark?" dark":""}`} style={{minHeight:"100vh"}}>
+          <WS/>
+          <div className="washi-bg si-wrap">
+            <div className="ws-card anim-ink" style={{width:"100%",maxWidth:380,padding:"44px 36px 40px",borderRadius:2}}>
+              <div style={{textAlign:"center",marginBottom:32}}>
+                <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.22em",color:"var(--text-dim)",marginBottom:10,textTransform:"uppercase"}}>Jobcard Management</div>
+                <h1 style={{fontFamily:"'Noto Serif JP',serif",fontSize:30,fontWeight:300,color:"var(--text-pri)",letterSpacing:"0.04em",lineHeight:1.2,marginBottom:6}}>{mode==="login"?"Welcome back":"Create account"}</h1>
+                <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:12,color:"var(--text-sec)",fontWeight:300}}>{mode==="login"?"Sign in to continue":"Set up your account"}</div>
+                <BrushStroke variant={1} style={{marginTop:16}}/>
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:16}}>
+                {mode==="register"&&<div><FL c="Full Name"/><input className="ws-input" placeholder="Your name…" value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()} autoComplete="name"/></div>}
+                <div><FL c="Email"/><input className="ws-input" type="email" placeholder="your@email.com" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()} autoComplete="email"/></div>
+                <div><FL c="Password"/><input className="ws-input" type="password" placeholder="••••••••" value={pw} onChange={e=>setPw(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submit()} autoComplete={mode==="login"?"current-password":"new-password"}/></div>
+                {err&&<div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,color:"var(--aka)",letterSpacing:"0.04em"}}>⚠ {err}</div>}
+              </div>
+              <BrushStroke variant={2} style={{margin:"24px 0"}}/>
+              <button className="ws-btn-primary" onClick={submit} disabled={busy} style={{width:"100%",display:"flex",justifyContent:"center",letterSpacing:"0.14em"}}>
+                {busy?"…":mode==="login"?"Sign In":"Create Account"}
+              </button>
+              <div style={{marginTop:20,textAlign:"center"}}>
+                <button onClick={()=>{setMode(m=>m==="login"?"register":"login");setErr("");}} style={{background:"none",border:"none",cursor:"pointer",fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,color:"var(--text-sec)",letterSpacing:"0.06em"}}>
+                  {mode==="login"?"New user? Create account →":"Already have an account? Sign in"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    const ClockPicker = ({value, onChange}) => {
+      const [phase, setPhase] = useState("hour");
+      const parts = (value||"09:00").split(":");
+      const hh = Math.min(23,Math.max(0,parseInt(parts[0])||0));
+      const mm = Math.min(59,Math.max(0,parseInt(parts[1])||0));
+      const set = (h,m) => onChange(`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`);
+
+      const SIZE=200,CX=100,CY=100,RO=74,RI=50;
+      const outerH=[12,1,2,3,4,5,6,7,8,9,10,11];
+      const innerH=[0,13,14,15,16,17,18,19,20,21,22,23];
+      const minMarks=[0,5,10,15,20,25,30,35,40,45,50,55];
+      const pos=(i,r)=>({x:parseFloat((CX+r*Math.sin((i/12)*2*Math.PI)).toFixed(1)),y:parseFloat((CY-r*Math.cos((i/12)*2*Math.PI)).toFixed(1))});
+
+      const handAngle = phase==="hour" ? ((hh%12)/12)*2*Math.PI : (mm/60)*2*Math.PI;
+      const handR = phase==="hour" ? (hh>=1&&hh<=12?RO:RI) : RO;
+      const hx=parseFloat((CX+handR*Math.sin(handAngle)).toFixed(1));
+      const hy=parseFloat((CY-handR*Math.cos(handAngle)).toFixed(1));
+
+      return (
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:2}}>
+            <button className="ck-hh-btn" onClick={()=>setPhase("hour")} style={{borderBottom:phase==="hour"?"2px solid var(--sumi)":"2px solid transparent"}}>{String(hh).padStart(2,"0")}</button>
+            <span style={{color:"var(--text-dim)",fontSize:28,fontFamily:"'Noto Serif JP',serif",fontWeight:300,lineHeight:1,marginBottom:2}}>:</span>
+            <button className="ck-hh-btn" onClick={()=>setPhase("minute")} style={{borderBottom:phase==="minute"?"2px solid var(--sumi)":"2px solid transparent"}}>{String(mm).padStart(2,"0")}</button>
+          </div>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",maxWidth:200}}>
+            <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:8,letterSpacing:"0.18em",color:"var(--text-dim)",textTransform:"uppercase"}}>{phase==="hour"?"select hour":"select minute"}</span>
+            {phase==="minute"&&<button onClick={()=>setPhase("hour")} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-sec)",fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.08em",padding:0}}>← hours</button>}
+          </div>
+          <svg viewBox={`0 0 ${SIZE} ${SIZE}`} style={{width:200,height:200,maxWidth:"100%",touchAction:"manipulation"}}>
+            <circle cx={CX} cy={CY} r={97} fill="var(--input-bg)" stroke="var(--card-border)" strokeWidth={1.5}/>
+            {Array.from({length:60},(_,i)=>{const a=(i/60)*2*Math.PI,isMaj=i%5===0,r1=isMaj?88:92;return <line key={i} x1={CX+r1*Math.sin(a)} y1={CY-r1*Math.cos(a)} x2={CX+97*Math.sin(a)} y2={CY-97*Math.cos(a)} stroke="var(--text-dim)" strokeWidth={isMaj?1.5:0.7} opacity={0.35}/>;
+            })}
+            {phase==="hour"?(<>
+              {outerH.map((h,i)=>{const{x,y}=pos(i,RO),sel=hh===h;return(<g key={`oh${h}`} className="ck-num" onClick={()=>{set(h,mm);setPhase("minute");}}><circle cx={x} cy={y} r={14} fill={sel?"var(--sumi)":"transparent"}/><text x={x} y={y+4.5} textAnchor="middle" fontSize={12} fontFamily="'Noto Sans JP',sans-serif" fill={sel?"var(--washi)":"var(--text-pri)"} fontWeight={sel?"500":"300"}>{h}</text></g>);})}
+              {innerH.map((h,i)=>{const{x,y}=pos(i,RI),sel=hh===h;return(<g key={`ih${h}`} className="ck-num" onClick={()=>{set(h,mm);setPhase("minute");}}><circle cx={x} cy={y} r={11} fill={sel?"var(--sumi)":"transparent"}/><text x={x} y={y+3.5} textAnchor="middle" fontSize={9} fontFamily="'Noto Sans JP',sans-serif" fill={sel?"var(--washi)":"var(--text-sec)"} fontWeight={sel?"500":"300"}>{String(h).padStart(2,"0")}</text></g>);})}
+            </>):(
+              minMarks.map((m,i)=>{const{x,y}=pos(i,RO),sel=mm===m;return(<g key={`mm${m}`} className="ck-num" onClick={()=>set(hh,m)}><circle cx={x} cy={y} r={14} fill={sel?"var(--sumi)":"transparent"}/><text x={x} y={y+4.5} textAnchor="middle" fontSize={11} fontFamily="'Noto Sans JP',sans-serif" fill={sel?"var(--washi)":"var(--text-pri)"} fontWeight={sel?"500":"300"}>{String(m).padStart(2,"0")}</text></g>);})
+            )}
+            <line x1={CX} y1={CY} x2={hx} y2={hy} stroke="var(--nori)" strokeWidth={1.5} strokeLinecap="round" opacity={0.75}/>
+            <circle cx={hx} cy={hy} r={5} fill="var(--nori)" opacity={0.55}/>
+            <circle cx={CX} cy={CY} r={3} fill="var(--sumi)"/>
+          </svg>
+          {phase==="minute"&&(
+            <div style={{display:"flex",alignItems:"center",gap:8,width:"100%",maxWidth:200}}>
+              <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase",flexShrink:0}}>Exact min</span>
+              <input type="number" min={0} max={59} value={mm} onChange={e=>{const v=parseInt(e.target.value);if(!isNaN(v)&&v>=0&&v<=59)set(hh,v);}} className="ws-input" style={{width:60,padding:"8px 10px",textAlign:"center",fontFamily:"'Noto Serif JP',serif",fontSize:14}}/>
+              <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,color:"var(--text-dim)"}}>(0–59)</span>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    const BulletEd = ({items,onChange,ph}) => {
+      const upd=(i,v)=>{const n=[...items];n[i]=v;onChange(n);};
+      const add=(i)=>{const n=[...items];n.splice(i+1,0,"");onChange(n);};
+      const rm=(i)=>{if(items.length===1){onChange([""]);return;}onChange(items.filter((_,x)=>x!==i));};
+      return (
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          {items.map((ln,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"center",gap:8}}>
+              <span style={{color:"var(--text-dim)",fontSize:16,flexShrink:0,lineHeight:1}}>•</span>
+              <input className="ws-input" style={{flex:1,padding:"8px 12px",fontSize:13}} placeholder={ph} value={ln} onChange={e=>upd(i,e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();add(i);}if(e.key==="Backspace"&&ln===""){e.preventDefault();rm(i);}}}/>
+              <button onClick={()=>rm(i)} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-dim)",fontSize:16,padding:"0 4px",flexShrink:0}} onMouseEnter={e=>e.currentTarget.style.color="var(--aka)"} onMouseLeave={e=>e.currentTarget.style.color="var(--text-dim)"}>×</button>
+            </div>
+          ))}
+          <button onClick={()=>add(items.length-1)} style={{alignSelf:"flex-start",background:"none",border:"none",cursor:"pointer",color:"var(--text-sec)",fontSize:11,fontFamily:"'Noto Sans JP',sans-serif",letterSpacing:"0.1em",padding:"4px 0"}} onMouseEnter={e=>e.currentTarget.style.color="var(--text-pri)"} onMouseLeave={e=>e.currentTarget.style.color="var(--text-sec)"}>+ add item</button>
+        </div>
+      );
+    };
+
+    const CModal = ({cModal,cTpl,cForm,setCModal,setCTpl,setCForm,cErrs,setCErrs,submitComplete}) => {
+      if(!cModal) return null;
+      const{job}=cModal;
+      const sc2=(k,v)=>{setCForm(f=>({...f,[k]:v}));setCErrs(e=>({...e,[k]:null}));};
+      const errStyle={fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,color:"var(--aka)",marginTop:5,letterSpacing:"0.04em"};
+      const lblStyle={fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.16em",color:"var(--text-sec)",fontWeight:500,textTransform:"uppercase",marginBottom:8};
+      return (
+        <div style={{position:"fixed",inset:0,background:"var(--modal-bg)",display:"flex",alignItems:"flex-start",justifyContent:"center",zIndex:950,backdropFilter:"blur(4px)",overflowY:"auto",padding:"40px 20px"}}>
+          <div className="ws-card anim-ink" style={{width:"100%",maxWidth:600,borderRadius:2,overflow:"hidden"}}>
+            <div style={{padding:"24px 28px 20px",borderBottom:"1px solid var(--card-border)"}}>
+              <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.2em",color:"var(--text-dim)",marginBottom:8,textTransform:"uppercase"}}>COMPLETION REPORT</div>
+              <div style={{fontFamily:"'Noto Serif JP',serif",fontSize:17,fontWeight:400,color:"var(--text-pri)",lineHeight:1.4}}>{job.title}</div>
+            </div>
+            {!cTpl?(
+              <div style={{padding:"28px 28px 32px"}}>
+                <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.16em",color:"var(--text-sec)",marginBottom:20,textTransform:"uppercase"}}>Select a report template</div>
+                <BrushStroke variant={0} style={{marginBottom:24}}/>
+                <div className="ws-card ws-card-hover" onClick={()=>setCTpl("site-visit")} style={{padding:"20px 22px",borderRadius:2,cursor:"pointer",borderLeft:"3px solid var(--matcha)"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                    <div style={{fontFamily:"'Noto Serif JP',serif",fontSize:15,fontWeight:400,color:"var(--text-pri)"}}>Site Visit Report</div>
+                  </div>
+                  <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,color:"var(--text-sec)",fontWeight:300,lineHeight:1.6}}>Arrived on site · Met with · Work Completed · Work Remaining · Additional Notes</div>
+                </div>
+                <div style={{display:"flex",justifyContent:"flex-end",gap:10,marginTop:28}}>
+                  <button className="ws-btn-ghost" onClick={()=>{setCModal(null);setCTpl(null);}}>Cancel</button>
+                </div>
+              </div>
+            ):(
+              <div style={{padding:"28px 28px 32px"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+                  <div style={{fontFamily:"'Noto Serif JP',serif",fontSize:14,color:"var(--text-pri)",fontWeight:400}}>Site Visit Report</div>
+                  <button onClick={()=>setCTpl(null)} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-dim)",fontSize:11,fontFamily:"'Noto Sans JP',sans-serif",letterSpacing:"0.08em"}}>← change template</button>
+                </div>
+                <BrushStroke variant={2} style={{marginBottom:24}}/>
+                <div style={{display:"flex",flexDirection:"column",gap:24}}>
+                  <div>
+                    <div style={lblStyle}>Arrived on site at</div>
+                    <ClockPicker value={cForm.arrivedAt} onChange={v=>sc2("arrivedAt",v)}/>
+                  </div>
+                  <div>
+                    <div style={lblStyle}>Met with <span style={{color:"var(--aka)"}}>*</span></div>
+                    <input className="ws-input" placeholder="Name or role of person met on site…" value={cForm.metWith} onChange={e=>sc2("metWith",e.target.value)} style={{borderColor:cErrs.metWith?"var(--aka)":undefined}}/>
+                    {cErrs.metWith&&<div style={errStyle}>{cErrs.metWith}</div>}
+                  </div>
+                  <div>
+                    <div style={lblStyle}>Work Completed <span style={{color:"var(--aka)"}}>*</span></div>
+                    <BulletEd items={cForm.workCompleted} onChange={v=>sc2("workCompleted",v)} ph="Describe completed work item…"/>
+                    {cErrs.workCompleted&&<div style={errStyle}>{cErrs.workCompleted}</div>}
+                  </div>
+                  <div>
+                    <div style={lblStyle}>Work Remaining <span style={{color:"var(--aka)"}}>*</span></div>
+                    <BulletEd items={cForm.workRemaining} onChange={v=>sc2("workRemaining",v)} ph="Describe remaining work item…"/>
+                    {cErrs.workRemaining&&<div style={errStyle}>{cErrs.workRemaining}</div>}
+                  </div>
+                  <div>
+                    <div style={lblStyle}>Additional Notes</div>
+                    <textarea className="ws-input" style={{minHeight:80,resize:"vertical",fontFamily:"'Noto Serif JP',serif",fontSize:13,fontWeight:300,lineHeight:1.7}} placeholder="Any additional observations or notes…" value={cForm.additionalNotes||""} onChange={e=>sc2("additionalNotes",e.target.value)}/>
+                  </div>
+                </div>
+                <BrushStroke variant={1} style={{margin:"28px 0 24px"}}/>
+                <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:24,padding:"14px 16px",background:"rgba(78,104,70,0.08)",border:"1px solid rgba(78,104,70,0.25)",borderRadius:1}}>
+                  <span style={{fontSize:18,color:"var(--matcha)",flexShrink:0}}>✓</span>
+                  <span style={{fontFamily:"'Noto Serif JP',serif",fontSize:13,color:"var(--matcha)",letterSpacing:"0.04em"}}>Jobcard complete</span>
+                </div>
+                <div style={{display:"flex",justifyContent:"flex-end",gap:10}}>
+                  <button className="ws-btn-ghost" onClick={()=>{setCModal(null);setCTpl(null);}}>Cancel</button>
+                  <button className="ws-btn-primary" onClick={submitComplete}>Complete</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    };
+
+    const generatePDF = (job, report) => {
+      if(!window.jspdf){console.error("jsPDF not loaded");return;}
+      const{jsPDF}=window.jspdf;
+      const doc=new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+      const W=210,M=20,CW=W-M*2;
+      let y=22;
+
+      const rule=()=>{doc.setDrawColor(200,184,154);doc.setLineWidth(0.3);doc.line(M,y,W-M,y);y+=8;};
+      const lbl=(t,x,yy)=>{doc.setFontSize(7);doc.setTextColor(150,130,100);doc.setFont("helvetica","bold");doc.text(t.toUpperCase(),x,yy);};
+      const val=(t,x,yy,w)=>{doc.setFontSize(11);doc.setTextColor(28,26,24);doc.setFont("helvetica","normal");const ls=doc.splitTextToSize(String(t||"—"),w);doc.text(ls,x,yy);return ls.length;};
+
+      // Header
+      lbl("Jobcard Management System",M,y); y+=6; rule();
+      doc.setFontSize(22);doc.setTextColor(28,26,24);doc.setFont("helvetica","normal");
+      doc.text("Completion Report",M,y); y+=8;
+      doc.setFontSize(9);doc.setTextColor(150,130,100);doc.setFont("helvetica","normal");
+      doc.text(`JC-${String(job.id).padStart(4,"0")}  ·  Completed`,M,y); y+=12;
+
+      // Job title
+      lbl("Job Title",M,y); y+=5;
+      const tl=val(job.title,M,y,CW); y+=tl*6+8;
+
+      // Metadata 2-col
+      const c2=M+CW/2+4,cw2=CW/2-4;
+      lbl("Category",M,y); lbl("Location",c2,y); y+=5;
+      const r1a=val(job.category,M,y,cw2),r1b=val(job.location||"—",c2,y,cw2); y+=Math.max(r1a,r1b)*6+6;
+      lbl("Assignee",M,y); lbl("Due Date",c2,y); y+=5;
+      const r2a=val(job.assignee||"Unassigned",M,y,cw2),r2b=val(fmtDate(job.due),c2,y,cw2); y+=Math.max(r2a,r2b)*6+10;
+      rule();
+
+      // Report section
+      if(report){
+        doc.setFontSize(11);doc.setTextColor(78,104,70);doc.setFont("helvetica","bold");
+        doc.text("SITE VISIT REPORT",M,y); y+=10;
+        if(report.arrivedAt){lbl("Arrived on site at",M,y);y+=5;val(report.arrivedAt,M,y,CW);y+=10;}
+        if(report.metWith){lbl("Met with",M,y);y+=5;const ml=val(report.metWith,M,y,CW);y+=ml*6+8;}
+        if(report.workCompleted?.length){
+          lbl("Work Completed",M,y);y+=5;
+          doc.setFontSize(10);doc.setTextColor(28,26,24);doc.setFont("helvetica","normal");
+          report.workCompleted.forEach(item=>{const ls=doc.splitTextToSize(`• ${item}`,CW-4);doc.text(ls,M+2,y);y+=ls.length*5+2;});
+          y+=4;
+        }
+        if(report.workRemaining?.length){
+          lbl("Work Remaining",M,y);y+=5;
+          doc.setFontSize(10);doc.setTextColor(28,26,24);doc.setFont("helvetica","normal");
+          report.workRemaining.forEach(item=>{const ls=doc.splitTextToSize(`• ${item}`,CW-4);doc.text(ls,M+2,y);y+=ls.length*5+2;});
+          y+=4;
+        }
+        if(report.additionalNotes){
+          lbl("Additional Notes",M,y);y+=5;
+          const nl=val(report.additionalNotes,M,y,CW);y+=nl*6+8;
+        }
+      } else {
+        doc.setFontSize(11);doc.setTextColor(28,26,24);doc.setFont("helvetica","italic");
+        doc.text("No completion report attached.",M,y); y+=12;
+      }
+      rule();
+      doc.setFontSize(8);doc.setTextColor(150,130,100);doc.setFont("helvetica","normal");
+      doc.text(`Generated: ${new Date().toLocaleString("en-GB")}`,M,y);
+      doc.save(`JC-${String(job.id).padStart(4,"0")}-completion.pdf`);
+    };
+
+    /* ── Page shell (outside App so its identity is stable across renders) ── */
+    const Page = ({dark,offline,toast,showInstall,onInstall,onDismissInstall,children}) => (
+      <div className={`ws-root${dark?" dark":""}`} style={{minHeight:"100vh"}}>
+        <WS/>
+        <div className="washi-bg">
+          {offline&&<div className="offline-badge">Offline</div>}
+          {toast&&<div className="anim-slide" style={{position:"fixed",bottom:showInstall?100:28,right:28,zIndex:1000,background:toast.type==="err"?"var(--aka)":"var(--text-pri)",color:"var(--bg)",padding:"12px 22px",borderRadius:1,fontFamily:"'Noto Sans JP',sans-serif",fontSize:12,letterSpacing:"0.08em",boxShadow:"0 4px 24px rgba(0,0,0,0.25)"}}>{toast.msg}</div>}
+          {showInstall&&(
+            <div className="install-banner">
+              <div className="install-icon" style={{fontFamily:"'Noto Serif JP',serif",fontSize:15,letterSpacing:"0.06em",color:"var(--text-sec)",fontWeight:400}}>JC</div>
+              <div style={{flex:1}}>
+                <div style={{fontFamily:"'Noto Serif JP',serif",fontSize:14,color:"var(--text-pri)",fontWeight:400}}>Install Jobcards</div>
+                <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,color:"var(--text-sec)",marginTop:3}}>Add to home screen for offline access</div>
+              </div>
+              <button className="ws-btn-primary" style={{padding:"10px 18px",fontSize:11}} onClick={onInstall}>Install</button>
+              <button onClick={onDismissInstall} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-dim)",fontSize:18,padding:"4px 8px",lineHeight:1}}>×</button>
+            </div>
+          )}
+          <div style={{maxWidth:820,margin:"0 auto",padding:"48px 28px 80px"}}>{children}</div>
+        </div>
+      </div>
+    );
+
+    /* ── Main App ────────────────────────────────────────────────────────── */
+    function App() {
+      const [jobs,setJobsRaw] = useState(()=>load("jc-jobs",SEED));
+      const [view,setView]    = useState("home");
+      const [selId,setSelId]  = useState(null);
+      const [fSt,setFSt]      = useState("All");
+      const [fPr,setFPr]      = useState("All");
+      const [srch,setSrch]    = useState("");
+      const [sort,setSort]    = useState("due");
+      const [edit,setEdit]    = useState(false);
+      const [delModal,setDelModal] = useState(false);
+      const [toast,setToast]  = useState(null);
+      const [form,setForm]    = useState({});
+      const [errs,setErrs]    = useState({});
+      const [dark,setDarkRaw] = useState(()=>load("jc-dark",false));
+      const [offline,setOffline] = useState(!navigator.onLine);
+      const [deferredPrompt,setDeferredPrompt] = useState(null);
+      const [showInstall,setShowInstall] = useState(false);
+      const [cModal,setCModal] = useState(null);
+      const [cTpl,setCTpl]    = useState(null);
+      const [cForm,setCForm]  = useState({arrivedAt:"",metWith:"",workCompleted:[""],workRemaining:[""],additionalNotes:""});
+      const [cErrs,setCErrs]  = useState({});
+      const [users,setUsersRaw]     = useState(()=>load("jc-users",[]));
+      const [session,setSessionRaw] = useState(()=>load("jc-session",null));
+      const setSession = s=>{setSessionRaw(s);save("jc-session",s);};
+      const setUsersStore = u=>{setUsersRaw(u);save("jc-users",u);};
+      const uid = useRef(load("jc-uid",5));
+      const [tab,setTab]         = useState("list");
+      const [calView,setCalView] = useState("week");
+      const [calDate,setCalDate] = useState(()=>new Date());
+      const calScrollRef         = useRef(null);
+
+      const setJobs = u => setJobsRaw(p=>{ const n=typeof u==="function"?u(p):u; save("jc-jobs",n); return n; });
+      const setDark = v => { const d=typeof v==="function"?v(dark):v; setDarkRaw(d); save("jc-dark",d); };
+
+      useEffect(()=>{
+        const oi=()=>setOffline(false), oo=()=>setOffline(true);
+        const bi=e=>{e.preventDefault();setDeferredPrompt(e);setShowInstall(true);};
+        window.addEventListener("online",oi); window.addEventListener("offline",oo);
+        window.addEventListener("beforeinstallprompt",bi);
+        return()=>{window.removeEventListener("online",oi);window.removeEventListener("offline",oo);window.removeEventListener("beforeinstallprompt",bi);};
+      },[]);
+
+      const triggerInstall = async()=>{
+        if(!deferredPrompt)return;
+        deferredPrompt.prompt();
+        const{outcome}=await deferredPrompt.userChoice;
+        if(outcome==="accepted")setShowInstall(false);
+      };
+
+      useEffect(()=>{ if(!toast)return; const t=setTimeout(()=>setToast(null),3200); return()=>clearTimeout(t); },[toast]);
+      useEffect(()=>{ if(tab==="calendar"&&calScrollRef.current) calScrollRef.current.scrollTop=90; },[tab,calView]);
+      const notify=(msg,type="ok")=>setToast({msg,type});
+      const selJob=jobs.find(j=>j.id===selId)||null;
+
+      const list=jobs
+        .filter(j=>fSt==="All"||j.status===fSt)
+        .filter(j=>fPr==="All"||j.priority===fPr)
+        .filter(j=>{ if(!srch)return true; const q=srch.toLowerCase(); return j.title.toLowerCase().includes(q)||j.assignee.toLowerCase().includes(q)||j.category.toLowerCase().includes(q); })
+        .sort((a,b)=>{
+          if(sort==="due")return new Date(a.due)-new Date(b.due);
+          if(sort==="priority")return PRIS.indexOf(b.priority)-PRIS.indexOf(a.priority);
+          return new Date(b.created)-new Date(a.created);
+        });
+
+      const cnts={Outstanding:jobs.filter(j=>j.status==="Outstanding").length,"In Progress":jobs.filter(j=>j.status==="In Progress").length,"On Hold":jobs.filter(j=>j.status==="On Hold").length};
+
+      const calJobs=jobs.filter(j=>fSt==="All"||j.status===fSt).filter(j=>fPr==="All"||j.priority===fPr).filter(j=>{if(!srch)return true;const q=srch.toLowerCase();return j.title.toLowerCase().includes(q)||j.assignee.toLowerCase().includes(q)||j.category.toLowerCase().includes(q);});
+      const ds=d=>{const dt=new Date(d);return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;};
+      const wkStart=d=>{const dt=new Date(d);const day=dt.getDay();dt.setDate(dt.getDate()+(day===0?-6:1-day));return dt;};
+      const wkDays=d=>Array.from({length:7},(_,i)=>{const dt=new Date(wkStart(d));dt.setDate(dt.getDate()+i);return dt;});
+      const isToday=d=>ds(d)===ds(new Date());
+      const CAL_HS=7,CAL_HE=20,CAL_SH=60;
+      const CAL_HOURS=Array.from({length:CAL_HE-CAL_HS},(_,i)=>CAL_HS+i);
+      const CAL_EVT=(9-CAL_HS)*CAL_SH;
+
+      const sf=(k,v)=>setForm(f=>({...f,[k]:v}));
+      const openAdd=()=>{setForm({title:"",category:"Maintenance",priority:"Medium",status:"Outstanding",assignee:"",location:"",due:"",description:""});setErrs({});setEdit(false);setView("form");};
+      const openEdit=j=>{setForm({...j});setErrs({});setEdit(true);setView("form");};
+
+      const validate=()=>{
+        const e={};
+        if(!form.title?.trim())e.title="Title required";
+        if(!form.assignee?.trim())e.assignee="Assignee required";
+        if(!form.location?.trim())e.location="Location required";
+        if(!form.due)e.due="Due date required";
+        setErrs(e); return Object.keys(e).length===0;
+      };
+
+      const submitForm=()=>{
+        if(!validate())return;
+        if(edit){setJobs(js=>js.map(j=>j.id===form.id?{...form}:j));setSelId(form.id);setView("detail");notify("Changes saved");}
+        else{const nj={...form,id:uid.current++,created:today()};save("jc-uid",uid.current);setJobs(js=>[nj,...js]);setView("home");notify("Jobcard created");}
+      };
+
+      const doDelete=()=>{setJobs(js=>js.filter(j=>j.id!==selId));setDelModal(false);setSelId(null);setView("home");notify("Deleted","err");};
+
+      const changeStatus=(job,status)=>{
+        if(status==="Completed"){
+          const base=job.inProgressAt?new Date(job.inProgressAt):new Date();
+          const hh=String(base.getHours()).padStart(2,"0"),mm=String(base.getMinutes()).padStart(2,"0");
+          setCForm({arrivedAt:`${hh}:${mm}`,metWith:"",workCompleted:[""],workRemaining:[""],additionalNotes:""});
+          setCErrs({}); setCTpl(null); setCModal({job});
+        } else {
+          const updated={...job,status,...(status==="In Progress"&&!job.inProgressAt?{inProgressAt:new Date().toISOString()}:{})};
+          setJobs(js=>js.map(j=>j.id===job.id?updated:j)); notify(`Status updated to ${status}`);
+        }
+      };
+
+      const submitComplete=()=>{
+        if(!cModal)return;
+        if(cTpl==="site-visit"){
+          const e={};
+          if(!cForm.metWith?.trim())e.metWith="Required";
+          if(!cForm.workCompleted.some(l=>l.trim()))e.workCompleted="At least one item required";
+          if(!cForm.workRemaining.some(l=>l.trim()))e.workRemaining="At least one item required";
+          if(Object.keys(e).length){setCErrs(e);return;}
+        }
+        setCErrs({});
+        const{job}=cModal;
+        const rpt=cTpl==="site-visit"?{templateType:"site-visit",arrivedAt:cForm.arrivedAt,metWith:cForm.metWith,workCompleted:cForm.workCompleted.filter(l=>l.trim()),workRemaining:cForm.workRemaining.filter(l=>l.trim()),additionalNotes:cForm.additionalNotes?.trim()||null}:null;
+        const completed={...job,status:"Completed",completionReport:rpt};
+        setJobs(js=>js.map(j=>j.id===job.id?completed:j));
+        generatePDF(completed,rpt);
+        setCModal(null); setCTpl(null); notify("Jobcard complete — PDF saved");
+      };
+
+      const handleSignIn = async(em,pw)=>{
+        const h=await hashPw(pw,em);
+        const u=users.find(u=>u.email.toLowerCase()===em.toLowerCase()&&u.pwHash===h);
+        if(!u)return "Invalid email or password";
+        setSession({userId:u.id,email:u.email,name:u.name});
+        return null;
+      };
+      const handleRegister = async(em,nm,pw)=>{
+        if(users.some(u=>u.email.toLowerCase()===em.toLowerCase()))return "Email already in use";
+        const h=await hashPw(pw,em);
+        const nu={id:Date.now(),email:em,name:nm,pwHash:h};
+        setUsersStore([...users,nu]);
+        setSession({userId:nu.id,email:nu.email,name:nu.name});
+        return null;
+      };
+      const handleSignOut=()=>setSession(null);
+
+      const ModeToggle=()=>(
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div className="ws-toggle-track" onClick={()=>setDark(d=>!d)} role="switch" aria-checked={dark} tabIndex={0} onKeyDown={e=>e.key===" "&&setDark(d=>!d)}>
+            <div className={`ws-toggle-knob${dark?" on":""}`}/>
+          </div>
+          <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase"}}>{dark?"Dark":"Light"}</span>
+        </div>
+      );
+
+      const TabNav=()=>(
+        <div className="tab-bar">
+          <button className={`tab-btn${tab==="list"?" active":""}`} onClick={()=>{setTab("list");setView("home");}}>LIST</button>
+          <button className={`tab-btn${tab==="calendar"?" active":""}`} onClick={()=>setTab("calendar")}>CALENDAR</button>
+        </div>
+      );
+
+      const CalendarView=()=>{
+        const days=calView==="week"?wkDays(calDate):[calDate];
+        const cols=days.length;
+        const now=new Date();
+        const nowPx=(now.getHours()*60+now.getMinutes()-CAL_HS*60)*(CAL_SH/60);
+        const showNow=now.getHours()>=CAL_HS&&now.getHours()<CAL_HE;
+        const DAY_ABB=["MON","TUE","WED","THU","FRI","SAT","SUN"];
+        const pLabel=calView==="day"
+          ?calDate.toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"})
+          :(()=>{const dd=wkDays(calDate);const f=dd[0],l=dd[6];const ma=f.toLocaleDateString("en-GB",{month:"short"}),mb=l.toLocaleDateString("en-GB",{month:"short"});return ma===mb?`${ma} ${f.getDate()}–${l.getDate()}, ${f.getFullYear()}`:`${ma} ${f.getDate()} – ${mb} ${l.getDate()}, ${f.getFullYear()}`;})();
+        const go=n=>{const d=new Date(calDate);d.setDate(d.getDate()+n*(calView==="week"?7:1));setCalDate(d);};
+        return (
+          <div className="cal-wrap">
+            <div className="cal-toolbar">
+              <div className="cal-nav">
+                <button className="cal-nav-btn" onClick={()=>go(-1)}>‹ Prev</button>
+                <button className="cal-nav-btn" onClick={()=>setCalDate(new Date())}>Today</button>
+                <button className="cal-nav-btn" onClick={()=>go(1)}>Next ›</button>
+              </div>
+              <span className="cal-period">{pLabel}</span>
+              <div className="cal-view-toggle">
+                <button className={`cal-view-btn${calView==="week"?" active":""}`} onClick={()=>setCalView("week")}>WEEK</button>
+                <button className={`cal-view-btn${calView==="day"?" active":""}`} onClick={()=>setCalView("day")}>DAY</button>
+              </div>
+            </div>
+            <div className="cal-grid-outer">
+              <div style={{display:"grid",gridTemplateColumns:`44px repeat(${cols},1fr)`,borderBottom:"1px solid var(--card-border)"}}>
+                <div/>
+                {days.map((d,i)=>(
+                  <div key={i} className={`cal-day-hdr${isToday(d)?" today":""}`}>
+                    <span className="cal-day-name">{calView==="week"?DAY_ABB[i]:d.toLocaleDateString("en-GB",{weekday:"short"}).toUpperCase()}</span>
+                    <span className={`cal-day-num${isToday(d)?" today-num":""}`}>{d.getDate()}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="cal-scroll" ref={calScrollRef}>
+                <div style={{display:"flex"}}>
+                  <div style={{width:44,flexShrink:0}}>
+                    {CAL_HOURS.map(h=><div key={h} className="cal-time-cell"><span className="cal-time-lbl">{h}:00</span></div>)}
+                  </div>
+                  {days.map((d,di)=>{
+                    const dStr=ds(d); const dayJobs=calJobs.filter(j=>j.due===dStr);
+                    const evH=dayJobs.length>1?Math.max(Math.floor(52/dayJobs.length),18):52;
+                    return (
+                      <div key={di} style={{flex:1,position:"relative",borderLeft:"1px solid var(--card-border)"}}>
+                        {CAL_HOURS.map(h=><div key={h} className="cal-slot"><div className="cal-slot-half"/></div>)}
+                        {dayJobs.map((job,ji)=>{const sc=SC[job.status];return(
+                          <div key={job.id} className="cal-event" style={{top:CAL_EVT+ji*evH,height:evH,background:sc.bg,border:`1px solid ${sc.border}`,color:sc.color}} onClick={()=>{setSelId(job.id);setTab("list");setView("detail");}}>
+                            <div className="cal-event-title">{job.title}</div>
+                            {calView==="day"&&evH>=28&&<div className="cal-event-sub">{job.location} · {job.assignee||"Unassigned"}</div>}
+                          </div>
+                        );})}
+                        {isToday(d)&&showNow&&<div className="cal-now-line" style={{top:nowPx}}><div className="cal-now-dot"/></div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      const pg={dark,offline,toast,showInstall,onInstall:triggerInstall,onDismissInstall:()=>setShowInstall(false)};
+      const cm={cModal,cTpl,cForm,setCModal,setCTpl,setCForm,cErrs,setCErrs,submitComplete};
+
+      if(!session) return <SignIn users={users} onSignIn={handleSignIn} onRegister={handleRegister}/>;
+
+      /* CALENDAR */
+      if(tab==="calendar") return (
+        <Page {...pg}>
+          <CModal {...cm}/>
+          <TabNav/>
+          <CalendarView/>
+        </Page>
+      );
+
+      /* HOME */
+      if(view==="home") return (
+        <Page {...pg}>
+          <CModal {...cm}/>
+          <TabNav/>
+          <div style={{marginBottom:48}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+              <div>
+                <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.24em",color:"var(--text-dim)",marginBottom:12,fontWeight:300}}>JOBCARD MANAGEMENT</div>
+                <h1 style={{fontFamily:"'Noto Serif JP',serif",fontWeight:300,fontSize:36,color:"var(--text-pri)",letterSpacing:"0.04em",lineHeight:1.2}}>Work Orders<span style={{display:"block",fontSize:14,color:"var(--text-sec)",fontWeight:300,marginTop:6,letterSpacing:"0.12em",fontFamily:"'Noto Sans JP',sans-serif"}}>Record of Works</span></h1>
+              </div>
+              <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:12}}>
+                <ModeToggle/>
+                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                  <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,color:"var(--text-sec)",letterSpacing:"0.06em",fontWeight:300}}>{session.name}</span>
+                  <button onClick={handleSignOut} style={{background:"none",border:"1px solid var(--card-border)",cursor:"pointer",fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,color:"var(--text-dim)",letterSpacing:"0.08em",padding:"5px 10px",borderRadius:1,transition:"var(--trans)"}} onMouseEnter={e=>e.currentTarget.style.borderColor="var(--nori)"} onMouseLeave={e=>e.currentTarget.style.borderColor="var(--card-border)"}>Sign out</button>
+                </div>
+              </div>
+            </div>
+            <BrushStroke variant={1} style={{marginTop:16}}/>
+          </div>
+
+          <div className="stat-grid" style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:40}}>
+            <StatTile label="Outstanding" count={cnts["Outstanding"]} color="var(--aka)"    onClick={()=>setFSt("Outstanding")}/>
+            <StatTile label="In Progress" count={cnts["In Progress"]} color="var(--indigo)" onClick={()=>setFSt("In Progress")}/>
+            <StatTile label="On Hold"     count={cnts["On Hold"]}     color="var(--ki)"     onClick={()=>setFSt("On Hold")}/>
+          </div>
+
+          <div style={{marginBottom:32}}>
+            <input className="ws-input" style={{marginBottom:10,textAlign:"center"}} placeholder="Search…" value={srch} onChange={e=>setSrch(e.target.value)}/>
+            <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+              <CustomSelect value={fSt} onChange={setFSt} options={[{value:"All",label:"All Status"},...STATS.map(o=>({value:o,label:o}))]}/>
+              <CustomSelect value={fPr} onChange={setFPr} options={[{value:"All",label:"All Priority"},...PRIS.map(p=>({value:p,label:p}))]}/>
+              <CustomSelect value={sort} onChange={setSort} options={[{value:"due",label:"Due Date"},{value:"priority",label:"Priority"},{value:"created",label:"Newest"}]}/>
+            </div>
+          </div>
+
+          <SL s={2}>{list.length} Work Order{list.length!==1?"s":""}{fSt!=="All"?` · ${fSt}`:""}</SL>
+
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {list.length===0&&(<div style={{textAlign:"center",padding:"64px 20px"}}><InkBlot size={56} opacity={0.08} style={{margin:"0 auto 20px"}}/><div style={{fontFamily:"'Noto Serif JP',serif",fontSize:16,color:"var(--text-dim)",fontWeight:300,letterSpacing:"0.08em"}}>No records found</div></div>)}
+            {list.map((job,i)=><JobRow key={job.id} job={job} delay={i*55} onClick={()=>{setSelId(job.id);setView("detail");}}/>)}
+            <div className="ws-card-hover" onClick={openAdd} style={{background:"var(--card-bg)",border:"1px dashed var(--card-border)",borderRadius:2,padding:"28px 24px",display:"flex",alignItems:"center",justifyContent:"center",gap:16,cursor:"pointer",transition:"var(--trans)",marginTop:list.length>0?0:0}}>
+              <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.2em",color:"var(--text-dim)",textTransform:"uppercase",opacity:0.5}}>New</span>
+              <span style={{fontFamily:"'Noto Serif JP',serif",fontSize:30,fontWeight:300,color:"var(--text-dim)",lineHeight:1,opacity:0.4}}>+</span>
+              <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.2em",color:"var(--text-dim)",textTransform:"uppercase",opacity:0.5}}>Jobcard</span>
+            </div>
+          </div>
+        </Page>
+      );
+
+      /* DETAIL */
+      if(view==="detail"&&selJob){
+        const job=jobs.find(j=>j.id===selJob.id)||selJob;
+        const sc=SC[job.status]; const ov=overdue(job.due,job.status);
+        return (
+          <Page {...pg}>
+            <CModal {...cm}/>
+            {delModal&&(
+              <div style={{position:"fixed",inset:0,background:"var(--modal-bg)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:900,backdropFilter:"blur(3px)"}}>
+                <div className="ws-card anim-ink" style={{padding:40,maxWidth:380,width:"90%",textAlign:"center",borderRadius:2}}>
+                  <InkBlot size={40} opacity={0.1} style={{margin:"0 auto 20px"}}/>
+                  <div style={{fontFamily:"'Noto Serif JP',serif",fontSize:20,fontWeight:400,color:"var(--text-pri)",marginBottom:10,letterSpacing:"0.04em"}}>Delete this record?</div>
+                  <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:12,color:"var(--text-sec)",lineHeight:1.7,marginBottom:28,fontWeight:300}}>"{job.title}"<br/>will be permanently removed.</div>
+                  <BrushStroke variant={0} style={{marginBottom:24}}/>
+                  <div style={{display:"flex",gap:12,justifyContent:"center"}}>
+                    <button className="ws-btn-ghost" onClick={()=>setDelModal(false)}>Cancel</button>
+                    <button className="ws-btn-danger" onClick={doDelete}>Delete</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:36}}>
+              <button className="ws-back" onClick={()=>setView("home")}>← Back</button>
+              <div className="nav-actions" style={{display:"flex",alignItems:"center",gap:16}}>
+                <ModeToggle/>
+                <button className="ws-btn-ghost" onClick={()=>openEdit(job)}>Edit</button>
+                <button className="ws-btn-danger" onClick={()=>setDelModal(true)}>Delete</button>
+              </div>
+            </div>
+
+            <div className="ws-card anim-ink" style={{padding:"36px 36px 32px",borderRadius:2,marginBottom:32,borderLeft:`3px solid ${sc.dot}`}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:24,flexWrap:"wrap",gap:16}}>
+                <div>
+                  <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.18em",color:"var(--text-dim)",marginBottom:10,fontWeight:300}}>JC-{String(job.id).padStart(4,"0")}</div>
+                  <h2 style={{fontFamily:"'Noto Serif JP',serif",fontSize:24,fontWeight:400,color:"var(--text-pri)",lineHeight:1.4,letterSpacing:"0.02em",maxWidth:480}}>{job.title}</h2>
+                </div>
+                <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:8}}>
+                  <Pill status={job.status}/><Mon priority={job.priority}/>
+                  {ov&&<span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,color:"var(--aka)",letterSpacing:"0.1em"}}>⚠ Overdue</span>}
+                </div>
+              </div>
+              {job.description&&(<><BrushStroke variant={0} style={{marginBottom:16}}/><p style={{fontFamily:"'Noto Serif JP',serif",fontSize:14,fontWeight:300,color:"var(--text-sec)",lineHeight:1.9,marginBottom:24,paddingLeft:16,borderLeft:"1px solid var(--card-border)"}}>{job.description}</p></>)}
+              <BrushStroke variant={2} style={{marginBottom:24}}/>
+              <div className="detail-meta" style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:24}}>
+                {[{k:"Category",v:job.category},{k:"Location",v:job.location},{k:"Assignee",v:job.assignee||"Unassigned"},{k:"Created",v:fmtDate(job.created)},{k:"Due Date",v:fmtDate(job.due)}].map(({k,v})=>(
+                  <div key={k}><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",marginBottom:6,fontWeight:500,textTransform:"uppercase"}}>{k}</div><div style={{fontFamily:"'Noto Serif JP',serif",fontSize:14,color:"var(--text-pri)",fontWeight:400}}>{v}</div></div>
+                ))}
+              </div>
+            </div>
+
+            {job.completionReport&&job.completionReport.templateType==="site-visit"&&(()=>{
+              const r=job.completionReport;
+              return (
+                <div className="ws-card anim-ink" style={{padding:"28px 32px",borderRadius:2,marginBottom:32,borderLeft:"3px solid var(--matcha)"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+                    <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.18em",color:"var(--matcha)",textTransform:"uppercase",fontWeight:500}}>Site Visit Report</div>
+                    <span style={{fontFamily:"'Noto Serif JP',serif",fontSize:13,color:"var(--matcha)",opacity:0.7}}>✓ Done</span>
+                  </div>
+                  <BrushStroke variant={0} style={{marginBottom:20}}/>
+                  <div style={{display:"flex",flexDirection:"column",gap:20}}>
+                    {r.arrivedAt&&<div><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.16em",color:"var(--text-dim)",fontWeight:500,textTransform:"uppercase",marginBottom:5}}>Arrived on site at</div><div style={{fontFamily:"'Noto Serif JP',serif",fontSize:15,color:"var(--text-pri)",fontWeight:400}}>{r.arrivedAt}</div></div>}
+                    {r.metWith&&<div><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.16em",color:"var(--text-dim)",fontWeight:500,textTransform:"uppercase",marginBottom:5}}>Met with</div><div style={{fontFamily:"'Noto Serif JP',serif",fontSize:14,color:"var(--text-pri)",fontWeight:400}}>{r.metWith}</div></div>}
+                    {r.workCompleted&&r.workCompleted.length>0&&(<div><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.16em",color:"var(--text-dim)",fontWeight:500,textTransform:"uppercase",marginBottom:8}}>Work Completed</div><ul style={{listStyle:"none",padding:0,display:"flex",flexDirection:"column",gap:5}}>{r.workCompleted.map((it,i)=><li key={i} style={{display:"flex",gap:10,alignItems:"flex-start"}}><span style={{color:"var(--matcha)",flexShrink:0,fontSize:15,lineHeight:1.5}}>•</span><span style={{fontFamily:"'Noto Serif JP',serif",fontSize:13,color:"var(--text-pri)",fontWeight:300,lineHeight:1.7}}>{it}</span></li>)}</ul></div>)}
+                    {r.workRemaining&&r.workRemaining.length>0&&(<div><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.16em",color:"var(--text-dim)",fontWeight:500,textTransform:"uppercase",marginBottom:8}}>Work Remaining</div><ul style={{listStyle:"none",padding:0,display:"flex",flexDirection:"column",gap:5}}>{r.workRemaining.map((it,i)=><li key={i} style={{display:"flex",gap:10,alignItems:"flex-start"}}><span style={{color:"var(--ki)",flexShrink:0,fontSize:15,lineHeight:1.5}}>•</span><span style={{fontFamily:"'Noto Serif JP',serif",fontSize:13,color:"var(--text-pri)",fontWeight:300,lineHeight:1.7}}>{it}</span></li>)}</ul></div>)}
+                    {r.additionalNotes&&(<div><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.16em",color:"var(--text-dim)",fontWeight:500,textTransform:"uppercase",marginBottom:5}}>Additional Notes</div><p style={{fontFamily:"'Noto Serif JP',serif",fontSize:13,color:"var(--text-pri)",fontWeight:300,lineHeight:1.8,margin:0}}>{r.additionalNotes}</p></div>)}
+                  </div>
+                  <BrushStroke variant={2} style={{margin:"20px 0 16px"}}/>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:14,color:"var(--matcha)"}}>✓</span><span style={{fontFamily:"'Noto Serif JP',serif",fontSize:12,color:"var(--matcha)",letterSpacing:"0.06em"}}>Jobcard complete</span></div>
+                </div>
+              );
+            })()}
+
+            <SL s={1}>Update Status</SL>
+            <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+              {STATS.filter(st=>st!==job.status).map(st=>{const c=SC[st];return(
+                <button key={st} onClick={()=>changeStatus(job,st)} style={{background:"transparent",color:c.color,border:`1px solid ${c.border}`,padding:"9px 18px",fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,letterSpacing:"0.08em",cursor:"pointer",borderRadius:1,transition:"all 0.2s",display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{width:5,height:5,borderRadius:"50%",background:c.dot,display:"inline-block"}}/>{st}
+                </button>
+              );})}
+            </div>
+          </Page>
+        );
+      }
+
+      /* FORM */
+      if(view==="form") return (
+        <Page {...pg}>
+          <CModal {...cm}/>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:36}}>
+            <button className="ws-back" onClick={()=>setView(edit?"detail":"home")}>← Back</button>
+            <ModeToggle/>
+          </div>
+          <div style={{marginBottom:36}}>
+            <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.22em",color:"var(--text-dim)",marginBottom:10,fontWeight:300}}>{edit?"EDIT":"CREATE"}</div>
+            <h2 style={{fontFamily:"'Noto Serif JP',serif",fontSize:28,fontWeight:300,color:"var(--text-pri)",letterSpacing:"0.04em"}}>{edit?"Edit Work Order":"New Work Order"}<span style={{display:"block",fontSize:13,color:"var(--text-sec)",fontWeight:300,marginTop:6,fontFamily:"'Noto Sans JP',sans-serif",letterSpacing:"0.1em"}}>{edit?"Update jobcard details":"Open a new work order"}</span></h2>
+            <BrushStroke variant={0} style={{marginTop:14}}/>
+          </div>
+          <div className="ws-card" style={{padding:"32px 32px 28px",borderRadius:2,marginBottom:8}}>
+            <div className="form-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:24,marginBottom:24}}>
+              <FG label="Job Title" error={errs.title} full><input className="ws-input" placeholder="Describe the task…" value={form.title||""} onChange={e=>sf("title",e.target.value)} style={{borderColor:errs.title?"var(--aka)":undefined}}/></FG>
+              <FG label="Category"><CustomSelect value={form.category||"Maintenance"} onChange={v=>sf("category",v)} options={CATS}/></FG>
+              <FG label="Priority"><CustomSelect value={form.priority||"Medium"} onChange={v=>sf("priority",v)} options={PRIS}/></FG>
+              <FG label="Status"><CustomSelect value={form.status||"Outstanding"} onChange={v=>sf("status",v)} options={STATS}/></FG>
+              <FG label="Due Date" error={errs.due}><input type="date" className="ws-input" value={form.due||""} onChange={e=>sf("due",e.target.value)} style={{borderColor:errs.due?"var(--aka)":undefined}}/></FG>
+              <FG label="Assignee" error={errs.assignee}><input className="ws-input" placeholder="Name or team…" value={form.assignee||""} onChange={e=>sf("assignee",e.target.value)} style={{borderColor:errs.assignee?"var(--aka)":undefined}}/></FG>
+              <FG label="Location" error={errs.location}><input className="ws-input" placeholder="Building, floor, zone…" value={form.location||""} onChange={e=>sf("location",e.target.value)} style={{borderColor:errs.location?"var(--aka)":undefined}}/></FG>
+              <FG label="Notes" full><textarea className="ws-input" style={{minHeight:90,resize:"vertical"}} placeholder="Context, hazards, special instructions…" value={form.description||""} onChange={e=>sf("description",e.target.value)}/></FG>
+            </div>
+            <BrushStroke variant={2} style={{marginBottom:24}}/>
+            <div style={{display:"flex",justifyContent:"flex-end",gap:12}}>
+              <button className="ws-btn-ghost" onClick={()=>setView(edit?"detail":"home")}>Cancel</button>
+              <button className="ws-btn-primary" onClick={submitForm}>{edit?"Save":"Create"}</button>
+            </div>
+          </div>
+        </Page>
+      );
+
+      return null;
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+  </script>
+</body>
+</html>
