@@ -504,11 +504,11 @@
 
       return (
         <>
-          <div style={{border:"1px solid var(--card-border)",borderRadius:2,background:"#f7f4ee",position:"relative",overflow:"hidden",minHeight:72}}>
+          <div style={{border:"1px solid var(--card-border)",borderRadius:2,background:"#f7f4ee",position:"relative",overflow:"hidden",minHeight:56}}>
             {value ? (
-              <img src={value} alt="Signature" style={{width:"100%",height:72,objectFit:"contain",display:"block"}}/>
+              <img src={value} alt="Signature" style={{width:"100%",height:56,objectFit:"contain",display:"block"}}/>
             ) : (
-              <div style={{height:72,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <div style={{height:56,display:"flex",alignItems:"center",justifyContent:"center"}}>
                 <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,color:"var(--text-dim)",letterSpacing:"0.1em"}}>No signature captured</span>
               </div>
             )}
@@ -519,29 +519,29 @@
           </div>
 
           {fullscreen&&(
-            <div style={{position:"fixed",inset:0,zIndex:1100,background:"rgba(20,18,16,0.96)",display:"flex",flexDirection:"column"}}>
-              <div style={{padding:"14px 20px 12px",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0,borderBottom:"1px solid rgba(200,184,154,0.12)"}}>
-                <div>
-                  <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.2em",color:"rgba(200,184,154,0.45)",textTransform:"uppercase",marginBottom:3}}>Completion Report</div>
-                  <span style={{fontFamily:"'Noto Serif JP',serif",fontSize:17,color:"#f0ebe0",fontWeight:300,letterSpacing:"0.04em"}}>Client Signature</span>
+            <div style={{position:"fixed",inset:0,zIndex:1100,background:"rgba(20,18,16,0.96)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"20px",overflow:"hidden"}}>
+              <div style={{width:"100%",maxWidth:680,display:"flex",flexDirection:"column",gap:12}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div>
+                    <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.2em",color:"rgba(200,184,154,0.45)",textTransform:"uppercase",marginBottom:3}}>Completion Report</div>
+                    <span style={{fontFamily:"'Noto Serif JP',serif",fontSize:17,color:"#f0ebe0",fontWeight:300,letterSpacing:"0.04em"}}>Client Signature</span>
+                  </div>
+                  <button onClick={()=>setFullscreen(false)} style={{background:"none",border:"1px solid rgba(200,184,154,0.25)",cursor:"pointer",color:"#c8b89a",fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.08em",padding:"6px 14px",borderRadius:1}}>× Close</button>
                 </div>
-                <button onClick={()=>setFullscreen(false)} style={{background:"none",border:"1px solid rgba(200,184,154,0.25)",cursor:"pointer",color:"#c8b89a",fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.08em",padding:"6px 14px",borderRadius:1}}>× Close</button>
-              </div>
-              <div style={{flex:1,padding:"12px 20px",display:"flex",flexDirection:"column",minHeight:0}}>
                 <canvas
                   ref={fsCanvasRef}
                   width={1080}
-                  height={600}
-                  style={{width:"100%",flex:1,background:"#f7f4ee",borderRadius:2,cursor:"crosshair",touchAction:"none",display:"block"}}
+                  height={520}
+                  style={{width:"100%",height:260,background:"#f7f4ee",borderRadius:2,cursor:"crosshair",touchAction:"none",display:"block"}}
                   onMouseDown={startDraw} onMouseMove={draw} onMouseUp={endDraw} onMouseLeave={endDraw}
                   onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={endDraw}
                 />
-              </div>
-              <div style={{padding:"12px 20px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0,borderTop:"1px solid rgba(200,184,154,0.12)"}}>
-                <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,color:"rgba(200,184,154,0.45)",letterSpacing:"0.1em"}}>Sign above with finger or stylus</span>
-                <div style={{display:"flex",gap:10}}>
-                  <button onClick={clearFs} style={{background:"none",border:"1px solid rgba(200,184,154,0.3)",cursor:"pointer",color:"#c8b89a",fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,letterSpacing:"0.1em",padding:"10px 20px",borderRadius:1}}>Clear</button>
-                  <button onClick={capture} style={{background:"#f0ebe0",color:"#1c1a18",border:"none",cursor:"pointer",fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,letterSpacing:"0.12em",padding:"10px 20px",borderRadius:1,fontWeight:500}}>Capture Signature</button>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,color:"rgba(200,184,154,0.45)",letterSpacing:"0.1em"}}>Sign above with finger or stylus</span>
+                  <div style={{display:"flex",gap:10}}>
+                    <button onClick={clearFs} style={{background:"none",border:"1px solid rgba(200,184,154,0.3)",cursor:"pointer",color:"#c8b89a",fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,letterSpacing:"0.1em",padding:"10px 20px",borderRadius:1}}>Clear</button>
+                    <button onClick={capture} style={{background:"#f0ebe0",color:"#1c1a18",border:"none",cursor:"pointer",fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,letterSpacing:"0.12em",padding:"10px 20px",borderRadius:1,fontWeight:500}}>Capture Signature</button>
+                  </div>
                 </div>
               </div>
             </div>
