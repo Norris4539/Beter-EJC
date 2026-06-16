@@ -518,29 +518,29 @@
           </div>
 
           {fullscreen&&(
-            <div style={{position:"fixed",inset:0,zIndex:1100,background:"rgba(20,18,16,0.96)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 20px"}}>
-              <div style={{width:"100%",maxWidth:720,display:"flex",flexDirection:"column",gap:14}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                  <div>
-                    <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.2em",color:"rgba(200,184,154,0.5)",textTransform:"uppercase",marginBottom:4}}>Completion Report</div>
-                    <span style={{fontFamily:"'Noto Serif JP',serif",fontSize:18,color:"#f0ebe0",fontWeight:300,letterSpacing:"0.04em"}}>Client Signature</span>
-                  </div>
-                  <button onClick={()=>setFullscreen(false)} style={{background:"none",border:"1px solid rgba(200,184,154,0.3)",cursor:"pointer",color:"#c8b89a",fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.08em",padding:"6px 14px",borderRadius:1}}>× Close without saving</button>
+            <div style={{position:"fixed",inset:0,zIndex:1100,background:"rgba(20,18,16,0.96)",display:"flex",flexDirection:"column"}}>
+              <div style={{padding:"14px 20px 12px",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0,borderBottom:"1px solid rgba(200,184,154,0.12)"}}>
+                <div>
+                  <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.2em",color:"rgba(200,184,154,0.45)",textTransform:"uppercase",marginBottom:3}}>Completion Report</div>
+                  <span style={{fontFamily:"'Noto Serif JP',serif",fontSize:17,color:"#f0ebe0",fontWeight:300,letterSpacing:"0.04em"}}>Client Signature</span>
                 </div>
+                <button onClick={()=>setFullscreen(false)} style={{background:"none",border:"1px solid rgba(200,184,154,0.25)",cursor:"pointer",color:"#c8b89a",fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.08em",padding:"6px 14px",borderRadius:1}}>× Close</button>
+              </div>
+              <div style={{flex:1,padding:"12px 20px",display:"flex",flexDirection:"column",minHeight:0}}>
                 <canvas
                   ref={fsCanvasRef}
                   width={1080}
-                  height={440}
-                  style={{width:"100%",height:"min(52vh,440px)",background:"#f7f4ee",borderRadius:2,cursor:"crosshair",touchAction:"none",display:"block"}}
+                  height={600}
+                  style={{width:"100%",flex:1,background:"#f7f4ee",borderRadius:2,cursor:"crosshair",touchAction:"none",display:"block"}}
                   onMouseDown={startDraw} onMouseMove={draw} onMouseUp={endDraw} onMouseLeave={endDraw}
                   onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={endDraw}
                 />
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                  <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,color:"rgba(200,184,154,0.5)",letterSpacing:"0.1em"}}>Sign above with finger or stylus</span>
-                  <div style={{display:"flex",gap:10}}>
-                    <button onClick={clearFs} style={{background:"none",border:"1px solid rgba(200,184,154,0.35)",cursor:"pointer",color:"#c8b89a",fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,letterSpacing:"0.1em",padding:"10px 22px",borderRadius:1}}>Clear</button>
-                    <button onClick={capture} style={{background:"#f0ebe0",color:"#1c1a18",border:"none",cursor:"pointer",fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,letterSpacing:"0.12em",padding:"10px 22px",borderRadius:1,fontWeight:500}}>Capture Signature</button>
-                  </div>
+              </div>
+              <div style={{padding:"12px 20px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0,borderTop:"1px solid rgba(200,184,154,0.12)"}}>
+                <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,color:"rgba(200,184,154,0.45)",letterSpacing:"0.1em"}}>Sign above with finger or stylus</span>
+                <div style={{display:"flex",gap:10}}>
+                  <button onClick={clearFs} style={{background:"none",border:"1px solid rgba(200,184,154,0.3)",cursor:"pointer",color:"#c8b89a",fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,letterSpacing:"0.1em",padding:"10px 20px",borderRadius:1}}>Clear</button>
+                  <button onClick={capture} style={{background:"#f0ebe0",color:"#1c1a18",border:"none",cursor:"pointer",fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,letterSpacing:"0.12em",padding:"10px 20px",borderRadius:1,fontWeight:500}}>Capture Signature</button>
                 </div>
               </div>
             </div>
