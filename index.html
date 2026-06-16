@@ -440,21 +440,22 @@
     };
 
     const SignaturePad = ({value, onChange}) => {
-      const canvasRef = useRef(null);
+      const [fullscreen, setFullscreen] = useState(false);
+      const fsCanvasRef = useRef(null);
       const drawing = useRef(false);
 
       useEffect(()=>{
-        const canvas = canvasRef.current;
-        if(!canvas) return;
+        if(!fullscreen || !fsCanvasRef.current) return;
+        const canvas = fsCanvasRef.current;
         const ctx = canvas.getContext("2d");
         ctx.fillStyle = "#f7f4ee";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         if(value){
           const img = new Image();
-          img.onload = ()=>ctx.drawImage(img, 0, 0);
+          img.onload = ()=>ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
           img.src = value;
         }
-      },[]);
+      }, [fullscreen]);
 
       const getPos = (e, canvas) => {
         const rect = canvas.getBoundingClientRect();
@@ -466,61 +467,98 @@
       };
 
       const startDraw = e => {
+        if(!fsCanvasRef.current) return;
         drawing.current = true;
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext("2d");
-        const {x,y} = getPos(e, canvas);
-        ctx.beginPath(); ctx.moveTo(x, y);
+        const ctx = fsCanvasRef.current.getContext("2d");
+        const {x,y} = getPos(e, fsCanvasRef.current);
+        ctx.beginPath(); ctx.moveTo(x,y);
         e.preventDefault();
       };
 
       const draw = e => {
-        if(!drawing.current) return;
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext("2d");
-        const {x,y} = getPos(e, canvas);
-        ctx.lineTo(x, y);
+        if(!drawing.current || !fsCanvasRef.current) return;
+        const ctx = fsCanvasRef.current.getContext("2d");
+        const {x,y} = getPos(e, fsCanvasRef.current);
+        ctx.lineTo(x,y);
         ctx.strokeStyle = "#1c1a18"; ctx.lineWidth = 2.5;
         ctx.lineCap = "round"; ctx.lineJoin = "round";
         ctx.stroke();
         e.preventDefault();
       };
 
-      const endDraw = () => {
-        if(!drawing.current) return;
-        drawing.current = false;
-        onChange(canvasRef.current.toDataURL("image/png"));
+      const endDraw = () => { drawing.current = false; };
+
+      const clearFs = () => {
+        if(!fsCanvasRef.current) return;
+        const ctx = fsCanvasRef.current.getContext("2d");
+        ctx.fillStyle = "#f7f4ee";
+        ctx.fillRect(0, 0, fsCanvasRef.current.width, fsCanvasRef.current.height);
       };
 
-      const clear = () => {
-        const canvas = canvasRef.current;
-        const ctx = canvas.getContext("2d");
-        ctx.fillStyle = "#f7f4ee";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        onChange(null);
+      const capture = () => {
+        if(!fsCanvasRef.current) return;
+        onChange(fsCanvasRef.current.toDataURL("image/png"));
+        setFullscreen(false);
       };
 
       return (
-        <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          <canvas
-            ref={canvasRef}
-            width={540}
-            height={140}
-            style={{width:"100%",height:140,border:"1px solid var(--card-border)",borderRadius:2,cursor:"crosshair",touchAction:"none",display:"block",background:"#f7f4ee"}}
-            onMouseDown={startDraw} onMouseMove={draw} onMouseUp={endDraw} onMouseLeave={endDraw}
-            onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={endDraw}
-          />
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,color:"var(--text-dim)",letterSpacing:"0.1em"}}>Sign above with finger or stylus</span>
-            <button onClick={clear} style={{background:"none",border:"none",cursor:"pointer",fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,color:"var(--text-sec)",letterSpacing:"0.1em",padding:"4px 0"}} onMouseEnter={e=>e.currentTarget.style.color="var(--aka)"} onMouseLeave={e=>e.currentTarget.style.color="var(--text-sec)"}>Clear</button>
+        <>
+          <div style={{border:"1px solid var(--card-border)",borderRadius:2,background:"#f7f4ee",position:"relative",overflow:"hidden",minHeight:72}}>
+            {value ? (
+              <img src={value} alt="Signature" style={{width:"100%",height:72,objectFit:"contain",display:"block"}}/>
+            ) : (
+              <div style={{height:72,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,color:"var(--text-dim)",letterSpacing:"0.1em"}}>No signature captured</span>
+              </div>
+            )}
+            <div style={{position:"absolute",bottom:6,right:6,display:"flex",gap:6}}>
+              {value&&<button onClick={()=>onChange(null)} style={{background:"none",border:"none",cursor:"pointer",fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,color:"var(--nori)",letterSpacing:"0.08em",padding:"4px 6px"}} onMouseEnter={e=>e.currentTarget.style.color="var(--aka)"} onMouseLeave={e=>e.currentTarget.style.color="var(--nori)"}>Clear</button>}
+              <button onClick={()=>setFullscreen(true)} style={{background:"var(--sumi)",color:"var(--washi)",border:"none",cursor:"pointer",fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.1em",padding:"5px 10px",borderRadius:1}}>{value?"Re-sign ↗":"Sign ↗"}</button>
+            </div>
           </div>
-        </div>
+
+          {fullscreen&&(
+            <div style={{position:"fixed",inset:0,zIndex:1100,background:"rgba(20,18,16,0.96)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 20px"}}>
+              <div style={{width:"100%",maxWidth:720,display:"flex",flexDirection:"column",gap:14}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div>
+                    <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.2em",color:"rgba(200,184,154,0.5)",textTransform:"uppercase",marginBottom:4}}>Completion Report</div>
+                    <span style={{fontFamily:"'Noto Serif JP',serif",fontSize:18,color:"#f0ebe0",fontWeight:300,letterSpacing:"0.04em"}}>Client Signature</span>
+                  </div>
+                  <button onClick={()=>setFullscreen(false)} style={{background:"none",border:"1px solid rgba(200,184,154,0.3)",cursor:"pointer",color:"#c8b89a",fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.08em",padding:"6px 14px",borderRadius:1}}>× Close without saving</button>
+                </div>
+                <canvas
+                  ref={fsCanvasRef}
+                  width={1080}
+                  height={440}
+                  style={{width:"100%",height:"min(52vh,440px)",background:"#f7f4ee",borderRadius:2,cursor:"crosshair",touchAction:"none",display:"block"}}
+                  onMouseDown={startDraw} onMouseMove={draw} onMouseUp={endDraw} onMouseLeave={endDraw}
+                  onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={endDraw}
+                />
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                  <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,color:"rgba(200,184,154,0.5)",letterSpacing:"0.1em"}}>Sign above with finger or stylus</span>
+                  <div style={{display:"flex",gap:10}}>
+                    <button onClick={clearFs} style={{background:"none",border:"1px solid rgba(200,184,154,0.35)",cursor:"pointer",color:"#c8b89a",fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,letterSpacing:"0.1em",padding:"10px 22px",borderRadius:1}}>Clear</button>
+                    <button onClick={capture} style={{background:"#f0ebe0",color:"#1c1a18",border:"none",cursor:"pointer",fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,letterSpacing:"0.12em",padding:"10px 22px",borderRadius:1,fontWeight:500}}>Capture Signature</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
       );
     };
 
-    const CModal = ({cModal,cTpl,cForm,setCModal,setCTpl,setCForm,cErrs,setCErrs,submitComplete}) => {
+    const CModal = ({cModal,cTpl,cForm,setCModal,setCTpl,setCForm,cErrs,setCErrs,submitComplete,templates,setTemplates,notify}) => {
+      const [savingTpl, setSavingTpl] = useState(false);
+      const [tplName, setTplName] = useState("");
       if(!cModal) return null;
       const{job}=cModal;
+      const saveTpl = () => {
+        if(!tplName.trim()) return;
+        const t={id:Date.now(),name:tplName.trim(),arrivedAt:cForm.arrivedAt,metWith:cForm.metWith,clientContact:cForm.clientContact,workCompleted:[...cForm.workCompleted],workRemaining:[...cForm.workRemaining],additionalNotes:cForm.additionalNotes};
+        setTemplates([...templates,t]); notify("Template saved"); setSavingTpl(false); setTplName("");
+      };
       const sc2=(k,v)=>{setCForm(f=>({...f,[k]:v}));setCErrs(e=>({...e,[k]:null}));};
       const errStyle={fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,color:"var(--aka)",marginTop:5,letterSpacing:"0.04em"};
       const lblStyle={fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.16em",color:"var(--text-sec)",fontWeight:500,textTransform:"uppercase",marginBottom:8};
@@ -538,9 +576,24 @@
                 <div className="ws-card ws-card-hover" onClick={()=>setCTpl("site-visit")} style={{padding:"20px 22px",borderRadius:2,cursor:"pointer",borderLeft:"3px solid var(--matcha)"}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
                     <div style={{fontFamily:"'Noto Serif JP',serif",fontSize:15,fontWeight:400,color:"var(--text-pri)"}}>Site Visit Report</div>
+                    <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,color:"var(--matcha)",letterSpacing:"0.12em",fontWeight:500}}>BUILT-IN</span>
                   </div>
-                  <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,color:"var(--text-sec)",fontWeight:300,lineHeight:1.6}}>Arrived on site · Met with · Work Completed · Work Remaining · Additional Notes</div>
+                  <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,color:"var(--text-sec)",fontWeight:300,lineHeight:1.6}}>Arrived on site · Met with · Client Contact · Work Completed · Work Remaining · Notes · Signature</div>
                 </div>
+                {templates.length>0&&(
+                  <div style={{marginTop:16,display:"flex",flexDirection:"column",gap:8}}>
+                    <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.18em",color:"var(--text-dim)",textTransform:"uppercase",marginBottom:2}}>Saved Templates</div>
+                    {templates.map(t=>(
+                      <div key={t.id} className="ws-card ws-card-hover" onClick={()=>{
+                        setCForm(f=>({...f,arrivedAt:t.arrivedAt||"",metWith:t.metWith||"",clientContact:t.clientContact||"",workCompleted:t.workCompleted?.length?[...t.workCompleted]:[""],workRemaining:t.workRemaining?.length?[...t.workRemaining]:[""],additionalNotes:t.additionalNotes||""}));
+                        setCTpl("site-visit");
+                      }} style={{padding:"16px 20px",borderRadius:2,cursor:"pointer",borderLeft:"3px solid var(--indigo)"}}>
+                        <div style={{fontFamily:"'Noto Serif JP',serif",fontSize:14,fontWeight:400,color:"var(--text-pri)",marginBottom:3}}>{t.name}</div>
+                        <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,color:"var(--text-sec)",fontWeight:300}}>Site Visit Report · Custom</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div style={{display:"flex",justifyContent:"flex-end",gap:10,marginTop:28}}>
                   <button className="ws-btn-ghost" onClick={()=>{setCModal(null);setCTpl(null);}}>Cancel</button>
                 </div>
@@ -561,6 +614,11 @@
                     <div style={lblStyle}>Met with <span style={{color:"var(--aka)"}}>*</span></div>
                     <input className="ws-input" placeholder="Name or role of person met on site…" value={cForm.metWith} onChange={e=>sc2("metWith",e.target.value)} style={{borderColor:cErrs.metWith?"var(--aka)":undefined}}/>
                     {cErrs.metWith&&<div style={errStyle}>{cErrs.metWith}</div>}
+                  </div>
+                  <div>
+                    <div style={lblStyle}>Client Contact <span style={{color:"var(--aka)"}}>*</span></div>
+                    <input className="ws-input" placeholder="Phone number or email address…" value={cForm.clientContact||""} onChange={e=>sc2("clientContact",e.target.value)} style={{borderColor:cErrs.clientContact?"var(--aka)":undefined}}/>
+                    {cErrs.clientContact&&<div style={errStyle}>{cErrs.clientContact}</div>}
                   </div>
                   <div>
                     <div style={lblStyle}>Work Completed <span style={{color:"var(--aka)"}}>*</span></div>
@@ -586,6 +644,18 @@
                   <span style={{fontSize:18,color:"var(--matcha)",flexShrink:0}}>✓</span>
                   <span style={{fontFamily:"'Noto Serif JP',serif",fontSize:13,color:"var(--matcha)",letterSpacing:"0.04em"}}>Jobcard complete</span>
                 </div>
+                {savingTpl ? (
+                  <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:16,padding:"14px 16px",background:"var(--input-bg)",border:"1px solid var(--card-border)",borderRadius:2}}>
+                    <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.14em",color:"var(--text-sec)",textTransform:"uppercase",flexShrink:0}}>Name</span>
+                    <input className="ws-input" autoFocus style={{flex:1,padding:"7px 12px",fontSize:13}} placeholder="e.g. Standard HVAC Visit…" value={tplName} onChange={e=>setTplName(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")saveTpl();if(e.key==="Escape"){setSavingTpl(false);setTplName("");}}}/>
+                    <button onClick={saveTpl} className="ws-btn-primary" style={{padding:"7px 14px",fontSize:10,flexShrink:0}}>Save</button>
+                    <button onClick={()=>{setSavingTpl(false);setTplName("");}} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-dim)",fontSize:18,padding:"0 4px",lineHeight:1,flexShrink:0}}>×</button>
+                  </div>
+                ) : (
+                  <div style={{marginBottom:16}}>
+                    <button onClick={()=>setSavingTpl(true)} style={{background:"none",border:"none",cursor:"pointer",fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,color:"var(--text-sec)",letterSpacing:"0.1em",padding:"4px 0",textDecoration:"underline",textUnderlineOffset:"3px"}} onMouseEnter={e=>e.currentTarget.style.color="var(--text-pri)"} onMouseLeave={e=>e.currentTarget.style.color="var(--text-sec)"}>Save current form as template</button>
+                  </div>
+                )}
                 <div style={{display:"flex",justifyContent:"flex-end",gap:10}}>
                   <button className="ws-btn-ghost" onClick={()=>{setCModal(null);setCTpl(null);}}>Cancel</button>
                   <button className="ws-btn-primary" onClick={submitComplete}>Complete</button>
@@ -632,7 +702,14 @@
         doc.setFontSize(11);doc.setTextColor(78,104,70);doc.setFont("helvetica","bold");
         doc.text("SITE VISIT REPORT",M,y); y+=10;
         if(report.arrivedAt){lbl("Arrived on site at",M,y);y+=5;val(report.arrivedAt,M,y,CW);y+=10;}
-        if(report.metWith){lbl("Met with",M,y);y+=5;const ml=val(report.metWith,M,y,CW);y+=ml*6+8;}
+        if(report.metWith){lbl("Met with",M,y);y+=5;const ml=val(report.metWith,M,y,CW);y+=ml*6+4;}
+        if(report.clientContact){lbl("Client Contact",M,y);y+=5;const cl=val(report.clientContact,M,y,CW);y+=cl*6+6;}
+        if(report.signatureDataUrl){
+          lbl("Client Signature",M,y);y+=5;
+          doc.setDrawColor(200,184,154);doc.setLineWidth(0.3);doc.rect(M,y,62,18);
+          try{doc.addImage(report.signatureDataUrl,"PNG",M+1,y+1,60,16);}catch(e){}
+          y+=24;
+        }
         if(report.workCompleted?.length){
           lbl("Work Completed",M,y);y+=5;
           doc.setFontSize(10);doc.setTextColor(28,26,24);doc.setFont("helvetica","normal");
@@ -648,13 +725,6 @@
         if(report.additionalNotes){
           lbl("Additional Notes",M,y);y+=5;
           const nl=val(report.additionalNotes,M,y,CW);y+=nl*6+8;
-        }
-        if(report.signatureDataUrl){
-          if(y>240){doc.addPage();y=22;}
-          lbl("Client Signature",M,y);y+=5;
-          doc.setDrawColor(200,184,154);doc.setLineWidth(0.3);doc.rect(M,y,CW,28);
-          try{doc.addImage(report.signatureDataUrl,"PNG",M+2,y+2,CW-4,24);}catch(e){}
-          y+=34;
         }
       } else {
         doc.setFontSize(11);doc.setTextColor(28,26,24);doc.setFont("helvetica","italic");
@@ -709,7 +779,9 @@
       const [showInstall,setShowInstall] = useState(false);
       const [cModal,setCModal] = useState(null);
       const [cTpl,setCTpl]    = useState(null);
-      const [cForm,setCForm]  = useState({arrivedAt:"",metWith:"",workCompleted:[""],workRemaining:[""],additionalNotes:"",signatureDataUrl:null});
+      const [cForm,setCForm]  = useState({arrivedAt:"",metWith:"",clientContact:"",workCompleted:[""],workRemaining:[""],additionalNotes:"",signatureDataUrl:null});
+      const [templates,setTemplatesRaw] = useState(()=>load("jc-templates",[]));
+      const setTemplates = t=>{setTemplatesRaw(t);save("jc-templates",t);};
       const [cErrs,setCErrs]  = useState({});
       const [users,setUsersRaw]     = useState(()=>load("jc-users",[]));
       const [session,setSessionRaw] = useState(()=>load(SESSION_KEY,null));
@@ -790,7 +862,7 @@
         if(status==="Completed"){
           const base=job.inProgressAt?new Date(job.inProgressAt):new Date();
           const hh=String(base.getHours()).padStart(2,"0"),mm=String(base.getMinutes()).padStart(2,"0");
-          setCForm({arrivedAt:`${hh}:${mm}`,metWith:"",workCompleted:[""],workRemaining:[""],additionalNotes:"",signatureDataUrl:null});
+          setCForm({arrivedAt:`${hh}:${mm}`,metWith:"",clientContact:"",workCompleted:[""],workRemaining:[""],additionalNotes:"",signatureDataUrl:null});
           setCErrs({}); setCTpl(null); setCModal({job});
         } else {
           const updated={...job,status,...(status==="In Progress"&&!job.inProgressAt?{inProgressAt:new Date().toISOString()}:{})};
@@ -803,13 +875,14 @@
         if(cTpl==="site-visit"){
           const e={};
           if(!cForm.metWith?.trim())e.metWith="Required";
+          if(!cForm.clientContact?.trim())e.clientContact="Required";
           if(!cForm.workCompleted.some(l=>l.trim()))e.workCompleted="At least one item required";
           if(!cForm.workRemaining.some(l=>l.trim()))e.workRemaining="At least one item required";
           if(Object.keys(e).length){setCErrs(e);return;}
         }
         setCErrs({});
         const{job}=cModal;
-        const rpt=cTpl==="site-visit"?{templateType:"site-visit",arrivedAt:cForm.arrivedAt,metWith:cForm.metWith,workCompleted:cForm.workCompleted.filter(l=>l.trim()),workRemaining:cForm.workRemaining.filter(l=>l.trim()),additionalNotes:cForm.additionalNotes?.trim()||null,signatureDataUrl:cForm.signatureDataUrl||null}:null;
+        const rpt=cTpl==="site-visit"?{templateType:"site-visit",arrivedAt:cForm.arrivedAt,metWith:cForm.metWith,clientContact:cForm.clientContact,workCompleted:cForm.workCompleted.filter(l=>l.trim()),workRemaining:cForm.workRemaining.filter(l=>l.trim()),additionalNotes:cForm.additionalNotes?.trim()||null,signatureDataUrl:cForm.signatureDataUrl||null}:null;
         const completed={...job,status:"Completed",completionReport:rpt};
         setJobs(js=>js.map(j=>j.id===job.id?completed:j));
         generatePDF(completed,rpt);
@@ -915,7 +988,7 @@
       };
 
       const pg={dark,offline,toast,showInstall,onInstall:triggerInstall,onDismissInstall:()=>setShowInstall(false)};
-      const cm={cModal,cTpl,cForm,setCModal,setCTpl,setCForm,cErrs,setCErrs,submitComplete};
+      const cm={cModal,cTpl,cForm,setCModal,setCTpl,setCForm,cErrs,setCErrs,submitComplete,templates,setTemplates,notify};
 
       if(!session) return <SignIn users={users} onSignIn={handleSignIn} onRegister={handleRegister}/>;
 
@@ -992,6 +1065,25 @@
                 </div>
               </div>
             )}
+
+            <div className="ws-card" style={{padding:"24px 28px",borderRadius:2,marginBottom:16}}>
+              <SL s={0}>Report Templates</SL>
+              {templates.length===0 ? (
+                <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:12,color:"var(--text-dim)",fontWeight:300,paddingBottom:4}}>No saved templates. Fill out a completion report and use "Save current form as template" to create one.</div>
+              ) : (
+                <div style={{display:"flex",flexDirection:"column"}}>
+                  {templates.map((t,i)=>(
+                    <div key={t.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0",borderBottom:i<templates.length-1?"1px solid var(--card-border)":"none"}}>
+                      <div>
+                        <div style={{fontFamily:"'Noto Serif JP',serif",fontSize:14,color:"var(--text-pri)",fontWeight:400,marginBottom:3}}>{t.name}</div>
+                        <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,color:"var(--text-dim)",fontWeight:300}}>Site Visit Report · Custom</div>
+                      </div>
+                      <button className="ws-btn-danger" onClick={()=>{setTemplates(templates.filter(x=>x.id!==t.id));notify(`"${t.name}" deleted`,"err");}} style={{padding:"5px 12px",fontSize:10}}>Delete</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
             <BrushStroke variant={0} style={{margin:"8px 0 24px"}}/>
             <button className="ws-btn-danger" onClick={handleSignOut} style={{letterSpacing:"0.12em"}}>Sign out</button>
@@ -1104,10 +1196,11 @@
                   <div style={{display:"flex",flexDirection:"column",gap:20}}>
                     {r.arrivedAt&&<div><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.16em",color:"var(--text-dim)",fontWeight:500,textTransform:"uppercase",marginBottom:5}}>Arrived on site at</div><div style={{fontFamily:"'Noto Serif JP',serif",fontSize:15,color:"var(--text-pri)",fontWeight:400}}>{r.arrivedAt}</div></div>}
                     {r.metWith&&<div><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.16em",color:"var(--text-dim)",fontWeight:500,textTransform:"uppercase",marginBottom:5}}>Met with</div><div style={{fontFamily:"'Noto Serif JP',serif",fontSize:14,color:"var(--text-pri)",fontWeight:400}}>{r.metWith}</div></div>}
+                    {r.clientContact&&<div><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.16em",color:"var(--text-dim)",fontWeight:500,textTransform:"uppercase",marginBottom:5}}>Client Contact</div><div style={{fontFamily:"'Noto Serif JP',serif",fontSize:14,color:"var(--text-pri)",fontWeight:400}}>{r.clientContact}</div></div>}
+                    {r.signatureDataUrl&&<div><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.16em",color:"var(--text-dim)",fontWeight:500,textTransform:"uppercase",marginBottom:8}}>Client Signature</div><img src={r.signatureDataUrl} alt="Signature" style={{height:56,maxWidth:"50%",objectFit:"contain",border:"1px solid var(--card-border)",borderRadius:2,background:"#f7f4ee",display:"block"}}/></div>}
                     {r.workCompleted&&r.workCompleted.length>0&&(<div><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.16em",color:"var(--text-dim)",fontWeight:500,textTransform:"uppercase",marginBottom:8}}>Work Completed</div><ul style={{listStyle:"none",padding:0,display:"flex",flexDirection:"column",gap:5}}>{r.workCompleted.map((it,i)=><li key={i} style={{display:"flex",gap:10,alignItems:"flex-start"}}><span style={{color:"var(--matcha)",flexShrink:0,fontSize:15,lineHeight:1.5}}>•</span><span style={{fontFamily:"'Noto Serif JP',serif",fontSize:13,color:"var(--text-pri)",fontWeight:300,lineHeight:1.7}}>{it}</span></li>)}</ul></div>)}
                     {r.workRemaining&&r.workRemaining.length>0&&(<div><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.16em",color:"var(--text-dim)",fontWeight:500,textTransform:"uppercase",marginBottom:8}}>Work Remaining</div><ul style={{listStyle:"none",padding:0,display:"flex",flexDirection:"column",gap:5}}>{r.workRemaining.map((it,i)=><li key={i} style={{display:"flex",gap:10,alignItems:"flex-start"}}><span style={{color:"var(--ki)",flexShrink:0,fontSize:15,lineHeight:1.5}}>•</span><span style={{fontFamily:"'Noto Serif JP',serif",fontSize:13,color:"var(--text-pri)",fontWeight:300,lineHeight:1.7}}>{it}</span></li>)}</ul></div>)}
                     {r.additionalNotes&&(<div><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.16em",color:"var(--text-dim)",fontWeight:500,textTransform:"uppercase",marginBottom:5}}>Additional Notes</div><p style={{fontFamily:"'Noto Serif JP',serif",fontSize:13,color:"var(--text-pri)",fontWeight:300,lineHeight:1.8,margin:0}}>{r.additionalNotes}</p></div>)}
-                    {r.signatureDataUrl&&(<div><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.16em",color:"var(--text-dim)",fontWeight:500,textTransform:"uppercase",marginBottom:8}}>Client Signature</div><img src={r.signatureDataUrl} alt="Client signature" style={{maxWidth:"100%",height:"auto",maxHeight:80,border:"1px solid var(--card-border)",borderRadius:2,background:"#f7f4ee",display:"block"}}/></div>)}
                   </div>
                   <BrushStroke variant={2} style={{margin:"20px 0 16px"}}/>
                   <div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:14,color:"var(--matcha)"}}>✓</span><span style={{fontFamily:"'Noto Serif JP',serif",fontSize:12,color:"var(--matcha)",letterSpacing:"0.06em"}}>Jobcard complete</span></div>
