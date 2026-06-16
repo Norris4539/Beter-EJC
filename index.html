@@ -183,11 +183,9 @@
     );
 
     /* ── SVG decoratives ─────────────────────────────────────────────────── */
-    const BrushStroke = ({ style={}, variant=0 }) => {
-      const paths=["M 8 12 Q 60 6 140 11 Q 220 16 290 10 Q 330 7 360 11","M 4 14 Q 80 8 180 13 Q 250 17 320 11 Q 345 9 368 13","M 12 11 Q 90 15 170 10 Q 240 6 310 12 Q 340 14 370 10"];
-      const ws=[1.2,1.8,0.9]; const ops=[0.18,0.14,0.2]; const v=variant%3;
-      return (<svg viewBox="0 0 376 20" style={{width:"100%",height:20,display:"block",...style}}><path d={paths[v]} stroke="var(--stroke-col,#1c1a18)" strokeWidth={ws[v]} fill="none" strokeLinecap="round" opacity={ops[v]}/></svg>);
-    };
+    const BrushStroke = ({ style={}, variant=0 }) => (
+      <div style={{height:2,background:"var(--card-border)",width:"100%",...style}}/>
+    );
 
     const InkBlot = ({ size=28, opacity=0.06, style={} }) => (
       <svg viewBox="0 0 60 60" style={{width:size,height:size,...style}}>
@@ -227,10 +225,10 @@
     ];
 
     const SEED=[
-      {id:1,title:"Replace HVAC Filter — Unit B3",category:"Maintenance",priority:"High",status:"Outstanding",assignee:"Marcus Chen",location:"Building B, Floor 3",created:"2026-06-01",due:"2026-06-07",description:"Monthly filter replacement overdue. Air quality reports flagging elevated particulates.",recipientEmail:""},
-      {id:2,title:"Fix Leaking Pipe, Restroom 2F",category:"Plumbing",priority:"Critical",status:"In Progress",assignee:"Sandra Okafor",location:"Building A, Floor 2",created:"2026-06-03",due:"2026-06-05",description:"Persistent leak behind sink. Water pooling on floor creating slip hazard.",recipientEmail:""},
-      {id:3,title:"Annual Fire Suppression Inspection",category:"Inspection",priority:"Medium",status:"Outstanding",assignee:"Unassigned",location:"All Zones",created:"2026-05-28",due:"2026-06-15",description:"Mandatory annual compliance inspection for all fire suppression systems.",recipientEmail:""},
-      {id:4,title:"New Lighting Install, Parking Level P2",category:"Electrical",priority:"Low",status:"On Hold",assignee:"Tom Reeves",location:"Parking Level P2",created:"2026-05-20",due:"2026-06-20",description:"Upgrade to LED fixtures. On hold — awaiting delivery.",recipientEmail:""},
+      {id:1,title:"Replace HVAC Filter — Unit B3",category:"Maintenance",priority:"High",status:"Outstanding",assignee:"Marcus Chen",location:"Building B, Floor 3",created:"2026-06-01",due:"2026-06-07",description:"Monthly filter replacement overdue. Air quality reports flagging elevated particulates.",recipientEmail:"",invoiceNo:""},
+      {id:2,title:"Fix Leaking Pipe, Restroom 2F",category:"Plumbing",priority:"Critical",status:"In Progress",assignee:"Sandra Okafor",location:"Building A, Floor 2",created:"2026-06-03",due:"2026-06-05",description:"Persistent leak behind sink. Water pooling on floor creating slip hazard.",recipientEmail:"",invoiceNo:""},
+      {id:3,title:"Annual Fire Suppression Inspection",category:"Inspection",priority:"Medium",status:"Outstanding",assignee:"Unassigned",location:"All Zones",created:"2026-05-28",due:"2026-06-15",description:"Mandatory annual compliance inspection for all fire suppression systems.",recipientEmail:"",invoiceNo:""},
+      {id:4,title:"New Lighting Install, Parking Level P2",category:"Electrical",priority:"Low",status:"On Hold",assignee:"Tom Reeves",location:"Parking Level P2",created:"2026-05-20",due:"2026-06-20",description:"Upgrade to LED fixtures. On hold — awaiting delivery.",recipientEmail:"",invoiceNo:""},
     ];
 
     const load = (key, def) => { try { const s=localStorage.getItem(key); return s?JSON.parse(s):def; } catch { return def; } };
@@ -274,14 +272,10 @@
         <div className="ws-card ws-card-hover anim-fade" onClick={onClick} style={{padding:"20px 24px",borderRadius:2,display:"flex",alignItems:"flex-start",gap:20,animationDelay:`${delay}ms`,borderLeft:`2px solid ${sc.dot}`}}>
           <Mon priority={job.priority}/>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:10,flexWrap:"wrap"}}>
-              <span style={{fontFamily:"'Noto Serif JP',serif",fontSize:15,fontWeight:400,color:"var(--text-pri)",letterSpacing:"0.01em",lineHeight:1.4}}>{job.title}</span>
+            <span style={{fontFamily:"'Noto Serif JP',serif",fontSize:15,fontWeight:400,color:"var(--text-pri)",letterSpacing:"0.01em",lineHeight:1.4,display:"block",marginBottom:8}}>{job.title}</span>
+            <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
               <Pill status={job.status}/>
-            </div>
-            <div style={{display:"flex",gap:20,flexWrap:"wrap"}}>
-              {[job.category,job.location,job.assignee||"Unassigned",ov?"⚠ Overdue":fmtDate(job.due)].map((m,i)=>(
-                <span key={i} style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,color:i===3&&ov?"var(--aka)":"var(--text-sec)",fontWeight:300,letterSpacing:"0.04em"}}>{m}</span>
-              ))}
+              {ov&&<span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,color:"var(--aka)",fontWeight:400,letterSpacing:"0.06em"}}>⚠ Overdue</span>}
             </div>
           </div>
           <span style={{color:"var(--text-dim)",fontSize:18,marginTop:4,flexShrink:0,fontWeight:300}}>—</span>
@@ -855,9 +849,9 @@
 
       const [formOrigin,setFormOrigin] = useState("home");
       const sf=(k,v)=>setForm(f=>({...f,[k]:v}));
-      const openAdd=()=>{setForm({title:"",category:"Maintenance",priority:"Medium",status:"Outstanding",assignee:"",location:"",due:"",scheduledTime:"",description:"",recipientEmail:""});setErrs({});setEdit(false);setFormOrigin("home");setView("form");};
+      const openAdd=()=>{setForm({title:"",category:"Maintenance",priority:"Medium",status:"Outstanding",assignee:"",location:"",due:"",scheduledTime:"",description:"",recipientEmail:"",invoiceNo:""});setErrs({});setEdit(false);setFormOrigin("home");setView("form");};
       const openEdit=j=>{setForm({...j});setErrs({});setEdit(true);setFormOrigin("home");setView("form");};
-      const openCalAdd=(day,hour)=>{const due=ds(day);const scheduledTime=`${String(hour).padStart(2,"0")}:00`;setForm({title:"",category:"Maintenance",priority:"Medium",status:"Outstanding",assignee:"",location:"",due,scheduledTime,description:"",recipientEmail:""});setErrs({});setEdit(false);setFormOrigin("calendar");setView("form");};
+      const openCalAdd=(day,hour)=>{const due=ds(day);const scheduledTime=`${String(hour).padStart(2,"0")}:00`;setForm({title:"",category:"Maintenance",priority:"Medium",status:"Outstanding",assignee:"",location:"",due,scheduledTime,description:"",recipientEmail:"",invoiceNo:""});setErrs({});setEdit(false);setFormOrigin("calendar");setView("form");};
 
       const validate=()=>{
         const e={};
@@ -1182,6 +1176,9 @@
               <CustomSelect value={fSt} onChange={setFSt} options={[{value:"All",label:"All Status"},...STATS.map(o=>({value:o,label:o}))]}/>
               <CustomSelect value={fPr} onChange={setFPr} options={[{value:"All",label:"All Priority"},...PRIS.map(p=>({value:p,label:p}))]}/>
               <CustomSelect value={sort} onChange={setSort} options={[{value:"due",label:"Due Date"},{value:"priority",label:"Priority"},{value:"created",label:"Newest"}]}/>
+              {(fSt!=="All"||fPr!=="All"||srch)&&(
+                <button className="ws-btn-ghost" onClick={()=>{setFSt("All");setFPr("All");setSrch("");}} style={{fontSize:10,padding:"8px 16px",letterSpacing:"0.12em"}}>× Clear Filters</button>
+              )}
             </div>
           </div>
 
@@ -1244,7 +1241,7 @@
               {job.description&&(<><BrushStroke variant={0} style={{marginBottom:16}}/><p style={{fontFamily:"'Noto Serif JP',serif",fontSize:14,fontWeight:300,color:"var(--text-sec)",lineHeight:1.9,marginBottom:24,paddingLeft:16,borderLeft:"1px solid var(--card-border)"}}>{job.description}</p></>)}
               <BrushStroke variant={2} style={{marginBottom:24}}/>
               <div className="detail-meta" style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:24}}>
-                {[{k:"Category",v:job.category},{k:"Location",v:job.location},{k:"Assignee",v:job.assignee||"Unassigned"},{k:"Created",v:fmtDate(job.created)},{k:"Due Date",v:fmtDate(job.due)},...(job.scheduledTime?[{k:"Scheduled Time",v:job.scheduledTime}]:[])].map(({k,v})=>(
+                {[...(job.invoiceNo?[{k:"Quote / Invoice No.",v:job.invoiceNo}]:[]),{k:"Category",v:job.category},{k:"Location",v:job.location},{k:"Assignee",v:job.assignee||"Unassigned"},{k:"Created",v:fmtDate(job.created)},{k:"Due Date",v:fmtDate(job.due)},...(job.scheduledTime?[{k:"Scheduled Time",v:job.scheduledTime}]:[])].map(({k,v})=>(
                   <div key={k}><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",marginBottom:6,fontWeight:500,textTransform:"uppercase"}}>{k}</div><div style={{fontFamily:"'Noto Serif JP',serif",fontSize:14,color:"var(--text-pri)",fontWeight:400}}>{v}</div></div>
                 ))}
               </div>
@@ -1300,6 +1297,7 @@
           </div>
           <div className="ws-card" style={{padding:"32px 32px 28px",borderRadius:2,marginBottom:8}}>
             <div className="form-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:24,marginBottom:24}}>
+              <FG label="Quote / Invoice No." full><input className="ws-input" placeholder="e.g. INV-0042 or QT-2026-001…" value={form.invoiceNo||""} onChange={e=>sf("invoiceNo",e.target.value)}/></FG>
               <FG label="Job Title" error={errs.title} full><input className="ws-input" placeholder="Describe the task…" value={form.title||""} onChange={e=>sf("title",e.target.value)} style={{borderColor:errs.title?"var(--aka)":undefined}}/></FG>
               <FG label="Category"><CustomSelect value={form.category||"Maintenance"} onChange={v=>sf("category",v)} options={CATS}/></FG>
               <FG label="Priority"><CustomSelect value={form.priority||"Medium"} onChange={v=>sf("priority",v)} options={PRIS}/></FG>
