@@ -519,8 +519,8 @@
           </div>
 
           {fullscreen&&(
-            <div style={{position:"fixed",inset:0,zIndex:1100,background:"rgba(10,9,8,0.6)",display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}}>
-              <div style={{width:"100%",maxWidth:680,background:"rgba(20,18,16,0.97)",borderRadius:3,padding:"16px",display:"flex",flexDirection:"column",gap:10,maxHeight:"calc(100vh - 32px)",overflow:"hidden"}}>
+            <div style={{position:"fixed",inset:0,zIndex:1100,background:"rgba(20,18,16,0.97)",display:"flex",flexDirection:"column",padding:"16px"}}>
+              <div style={{flex:1,display:"flex",flexDirection:"column",gap:10,overflow:"hidden",minHeight:0}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
                   <div>
                     <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.2em",color:"rgba(200,184,154,0.45)",textTransform:"uppercase",marginBottom:3}}>Completion Report</div>
@@ -528,14 +528,16 @@
                   </div>
                   <button onClick={()=>setFullscreen(false)} style={{background:"none",border:"1px solid rgba(200,184,154,0.25)",cursor:"pointer",color:"#c8b89a",fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.08em",padding:"6px 14px",borderRadius:1,flexShrink:0}}>× Close</button>
                 </div>
-                <canvas
-                  ref={fsCanvasRef}
-                  width={1080}
-                  height={360}
-                  style={{width:"100%",height:180,background:"#f7f4ee",borderRadius:2,cursor:"crosshair",touchAction:"none",display:"block",flexShrink:0}}
-                  onMouseDown={startDraw} onMouseMove={draw} onMouseUp={endDraw} onMouseLeave={endDraw}
-                  onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={endDraw}
-                />
+                <div style={{flex:1,minHeight:0}}>
+                  <canvas
+                    ref={fsCanvasRef}
+                    width={1080}
+                    height={1920}
+                    style={{width:"100%",height:"100%",background:"#f7f4ee",borderRadius:2,cursor:"crosshair",touchAction:"none",display:"block"}}
+                    onMouseDown={startDraw} onMouseMove={draw} onMouseUp={endDraw} onMouseLeave={endDraw}
+                    onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={endDraw}
+                  />
+                </div>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
                   <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,color:"rgba(200,184,154,0.45)",letterSpacing:"0.1em"}}>Sign above with finger or stylus</span>
                   <div style={{display:"flex",gap:10}}>
@@ -792,6 +794,7 @@
       const uid = useRef(load("jc-uid",5));
       const [emailCfg,setEmailCfgRaw] = useState(()=>load("jc-email-config",{endpointUrl:"",senderName:""}));
       const setEmailCfg = c=>{setEmailCfgRaw(c);save("jc-email-config",c);};
+      const [eCfg,setECfg] = useState(()=>load("jc-email-config",{endpointUrl:"",senderName:""}));
       const [tab,setTab]         = useState("list");
       const [calView,setCalView] = useState("week");
       const [calDate,setCalDate] = useState(()=>new Date());
@@ -1017,7 +1020,7 @@
       if(!session) return <SignIn users={users} onSignIn={handleSignIn} onRegister={handleRegister}/>;
 
       /* CALENDAR */
-      if(tab==="calendar") return (
+      if(tab==="calendar"&&view!=="form") return (
         <Page {...pg}>
           <CModal {...cm}/>
           <TabNav/>
@@ -1109,19 +1112,16 @@
               )}
             </div>
 
-            {session.isAdmin&&(()=>{
-              const [eCfg,setECfg] = React.useState({...emailCfg});
-              return (
-                <div className="ws-card" style={{padding:"24px 28px",borderRadius:2,marginBottom:16}}>
-                  <SL s={1}>Email Notifications</SL>
-                  <div style={{display:"flex",flexDirection:"column",gap:14}}>
-                    <FG label="Proxy Endpoint URL"><input className="ws-input" placeholder="https://…/send-email" value={eCfg.endpointUrl||""} onChange={e=>setECfg(c=>({...c,endpointUrl:e.target.value}))}/></FG>
-                    <FG label="Sender Display Name"><input className="ws-input" placeholder="JobFlow Notifications" value={eCfg.senderName||""} onChange={e=>setECfg(c=>({...c,senderName:e.target.value}))}/></FG>
-                    <button className="ws-btn-primary" style={{alignSelf:"flex-start",fontSize:11,padding:"9px 20px",letterSpacing:"0.12em"}} onClick={()=>{setEmailCfg(eCfg);notify("Email settings saved");}}>Save</button>
-                  </div>
+            {session.isAdmin&&(
+              <div className="ws-card" style={{padding:"24px 28px",borderRadius:2,marginBottom:16}}>
+                <SL s={1}>Email Notifications</SL>
+                <div style={{display:"flex",flexDirection:"column",gap:14}}>
+                  <FG label="Proxy Endpoint URL"><input className="ws-input" placeholder="https://…/send-email" value={eCfg.endpointUrl||""} onChange={e=>setECfg(c=>({...c,endpointUrl:e.target.value}))}/></FG>
+                  <FG label="Sender Display Name"><input className="ws-input" placeholder="JobFlow Notifications" value={eCfg.senderName||""} onChange={e=>setECfg(c=>({...c,senderName:e.target.value}))}/></FG>
+                  <button className="ws-btn-primary" style={{alignSelf:"flex-start",fontSize:11,padding:"9px 20px",letterSpacing:"0.12em"}} onClick={()=>{setEmailCfg(eCfg);notify("Email settings saved");}}>Save</button>
                 </div>
-              );
-            })()}
+              </div>
+            )}
 
             <BrushStroke variant={0} style={{margin:"8px 0 24px"}}/>
             <button className="ws-btn-danger" onClick={handleSignOut} style={{letterSpacing:"0.12em"}}>Sign out</button>
