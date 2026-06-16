@@ -219,10 +219,10 @@
     const STATS=["Outstanding","In Progress","On Hold","Completed"];
 
     const SEED=[
-      {id:1,title:"Replace HVAC Filter — Unit B3",category:"Maintenance",priority:"High",status:"Outstanding",assignee:"Marcus Chen",location:"Building B, Floor 3",created:"2026-06-01",due:"2026-06-07",description:"Monthly filter replacement overdue. Air quality reports flagging elevated particulates."},
-      {id:2,title:"Fix Leaking Pipe, Restroom 2F",category:"Plumbing",priority:"Critical",status:"In Progress",assignee:"Sandra Okafor",location:"Building A, Floor 2",created:"2026-06-03",due:"2026-06-05",description:"Persistent leak behind sink. Water pooling on floor creating slip hazard."},
-      {id:3,title:"Annual Fire Suppression Inspection",category:"Inspection",priority:"Medium",status:"Outstanding",assignee:"Unassigned",location:"All Zones",created:"2026-05-28",due:"2026-06-15",description:"Mandatory annual compliance inspection for all fire suppression systems."},
-      {id:4,title:"New Lighting Install, Parking Level P2",category:"Electrical",priority:"Low",status:"On Hold",assignee:"Tom Reeves",location:"Parking Level P2",created:"2026-05-20",due:"2026-06-20",description:"Upgrade to LED fixtures. On hold — awaiting delivery."},
+      {id:1,title:"Replace HVAC Filter — Unit B3",category:"Maintenance",priority:"High",status:"Outstanding",assignee:"Marcus Chen",location:"Building B, Floor 3",created:"2026-06-01",due:"2026-06-07",description:"Monthly filter replacement overdue. Air quality reports flagging elevated particulates.",recipientEmail:""},
+      {id:2,title:"Fix Leaking Pipe, Restroom 2F",category:"Plumbing",priority:"Critical",status:"In Progress",assignee:"Sandra Okafor",location:"Building A, Floor 2",created:"2026-06-03",due:"2026-06-05",description:"Persistent leak behind sink. Water pooling on floor creating slip hazard.",recipientEmail:""},
+      {id:3,title:"Annual Fire Suppression Inspection",category:"Inspection",priority:"Medium",status:"Outstanding",assignee:"Unassigned",location:"All Zones",created:"2026-05-28",due:"2026-06-15",description:"Mandatory annual compliance inspection for all fire suppression systems.",recipientEmail:""},
+      {id:4,title:"New Lighting Install, Parking Level P2",category:"Electrical",priority:"Low",status:"On Hold",assignee:"Tom Reeves",location:"Parking Level P2",created:"2026-05-20",due:"2026-06-20",description:"Upgrade to LED fixtures. On hold — awaiting delivery.",recipientEmail:""},
     ];
 
     const load = (key, def) => { try { const s=localStorage.getItem(key); return s?JSON.parse(s):def; } catch { return def; } };
@@ -735,6 +735,7 @@
       doc.setFontSize(8);doc.setTextColor(150,130,100);doc.setFont("helvetica","normal");
       doc.text(`Generated: ${new Date().toLocaleString("en-GB")}`,M,y);
       doc.save(`JC-${String(job.id).padStart(4,"0")}-completion.pdf`);
+      return doc;
     };
 
     /* ── Page shell (outside App so its identity is stable across renders) ── */
@@ -789,6 +790,8 @@
       const setSession = s=>{setSessionRaw(s);save(SESSION_KEY,s);};
       const setUsersStore = u=>{setUsersRaw(u);save("jc-users",u);};
       const uid = useRef(load("jc-uid",5));
+      const [emailCfg,setEmailCfgRaw] = useState(()=>load("jc-email-config",{endpointUrl:"",senderName:""}));
+      const setEmailCfg = c=>{setEmailCfgRaw(c);save("jc-email-config",c);};
       const [tab,setTab]         = useState("list");
       const [calView,setCalView] = useState("week");
       const [calDate,setCalDate] = useState(()=>new Date());
@@ -840,9 +843,9 @@
 
       const [formOrigin,setFormOrigin] = useState("home");
       const sf=(k,v)=>setForm(f=>({...f,[k]:v}));
-      const openAdd=()=>{setForm({title:"",category:"Maintenance",priority:"Medium",status:"Outstanding",assignee:"",location:"",due:"",scheduledTime:"",description:""});setErrs({});setEdit(false);setFormOrigin("home");setView("form");};
+      const openAdd=()=>{setForm({title:"",category:"Maintenance",priority:"Medium",status:"Outstanding",assignee:"",location:"",due:"",scheduledTime:"",description:"",recipientEmail:""});setErrs({});setEdit(false);setFormOrigin("home");setView("form");};
       const openEdit=j=>{setForm({...j});setErrs({});setEdit(true);setFormOrigin("home");setView("form");};
-      const openCalAdd=(day,hour)=>{const due=ds(day);const scheduledTime=`${String(hour).padStart(2,"0")}:00`;setForm({title:"",category:"Maintenance",priority:"Medium",status:"Outstanding",assignee:"",location:"",due,scheduledTime,description:""});setErrs({});setEdit(false);setFormOrigin("calendar");setView("form");};
+      const openCalAdd=(day,hour)=>{const due=ds(day);const scheduledTime=`${String(hour).padStart(2,"0")}:00`;setForm({title:"",category:"Maintenance",priority:"Medium",status:"Outstanding",assignee:"",location:"",due,scheduledTime,description:"",recipientEmail:""});setErrs({});setEdit(false);setFormOrigin("calendar");setView("form");};
 
       const validate=()=>{
         const e={};
@@ -873,6 +876,22 @@
         }
       };
 
+      const sendEmail = async(job, doc) => {
+        if(!emailCfg.endpointUrl||!job.recipientEmail) return;
+        const pdfBase64 = doc.output("datauristring");
+        const filename = `JC-${String(job.id).padStart(4,"0")}-completion.pdf`;
+        try {
+          const res = await fetch(emailCfg.endpointUrl, {
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({to:job.recipientEmail,subject:`Completion Report: ${job.title}`,senderName:emailCfg.senderName||"JobFlow",pdfBase64,filename,jobId:job.id,jobTitle:job.title})
+          });
+          const data = await res.json();
+          if(data.success) notify(`Report emailed to ${job.recipientEmail}`);
+          else notify("Email failed — PDF saved locally","err");
+        } catch { notify("Email failed — PDF saved locally","err"); }
+      };
+
       const submitComplete=()=>{
         if(!cModal)return;
         if(cTpl==="site-visit"){
@@ -888,8 +907,9 @@
         const rpt=cTpl==="site-visit"?{templateType:"site-visit",arrivedAt:cForm.arrivedAt,metWith:cForm.metWith,clientContact:cForm.clientContact,workCompleted:cForm.workCompleted.filter(l=>l.trim()),workRemaining:cForm.workRemaining.filter(l=>l.trim()),additionalNotes:cForm.additionalNotes?.trim()||null,signatureDataUrl:cForm.signatureDataUrl||null}:null;
         const completed={...job,status:"Completed",completionReport:rpt};
         setJobs(js=>js.map(j=>j.id===job.id?completed:j));
-        generatePDF(completed,rpt);
+        const pdfDoc=generatePDF(completed,rpt);
         setCModal(null); setCTpl(null); notify("Jobcard complete — PDF saved");
+        sendEmail(completed,pdfDoc);
       };
 
       const handleSignIn = async(em,pw)=>{
@@ -1089,6 +1109,20 @@
               )}
             </div>
 
+            {session.isAdmin&&(()=>{
+              const [eCfg,setECfg] = React.useState({...emailCfg});
+              return (
+                <div className="ws-card" style={{padding:"24px 28px",borderRadius:2,marginBottom:16}}>
+                  <SL s={1}>Email Notifications</SL>
+                  <div style={{display:"flex",flexDirection:"column",gap:14}}>
+                    <FG label="Proxy Endpoint URL"><input className="ws-input" placeholder="https://…/send-email" value={eCfg.endpointUrl||""} onChange={e=>setECfg(c=>({...c,endpointUrl:e.target.value}))}/></FG>
+                    <FG label="Sender Display Name"><input className="ws-input" placeholder="JobFlow Notifications" value={eCfg.senderName||""} onChange={e=>setECfg(c=>({...c,senderName:e.target.value}))}/></FG>
+                    <button className="ws-btn-primary" style={{alignSelf:"flex-start",fontSize:11,padding:"9px 20px",letterSpacing:"0.12em"}} onClick={()=>{setEmailCfg(eCfg);notify("Email settings saved");}}>Save</button>
+                  </div>
+                </div>
+              );
+            })()}
+
             <BrushStroke variant={0} style={{margin:"8px 0 24px"}}/>
             <button className="ws-btn-danger" onClick={handleSignOut} style={{letterSpacing:"0.12em"}}>Sign out</button>
           </div>
@@ -1246,6 +1280,7 @@
               <FG label="Scheduled Time"><input type="time" className="ws-input" value={form.scheduledTime||""} onChange={e=>sf("scheduledTime",e.target.value)}/></FG>
               <FG label="Assignee" error={errs.assignee}><input className="ws-input" placeholder="Name or team…" value={form.assignee||""} onChange={e=>sf("assignee",e.target.value)} style={{borderColor:errs.assignee?"var(--aka)":undefined}}/></FG>
               <FG label="Location" error={errs.location}><input className="ws-input" placeholder="Building, floor, zone…" value={form.location||""} onChange={e=>sf("location",e.target.value)} style={{borderColor:errs.location?"var(--aka)":undefined}}/></FG>
+              <FG label="Report Recipient Email" full><input type="email" className="ws-input" placeholder="Send completion report to…" value={form.recipientEmail||""} onChange={e=>sf("recipientEmail",e.target.value)}/></FG>
               <FG label="Notes" full><textarea className="ws-input" style={{minHeight:90,resize:"vertical"}} placeholder="Context, hazards, special instructions…" value={form.description||""} onChange={e=>sf("description",e.target.value)}/></FG>
             </div>
             <BrushStroke variant={2} style={{marginBottom:24}}/>
