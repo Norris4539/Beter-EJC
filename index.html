@@ -159,7 +159,8 @@
         .cal-scroll{overflow-y:auto;max-height:calc(100vh - 320px);min-height:280px;}
         .cal-time-cell{height:60px;display:flex;align-items:flex-start;justify-content:flex-end;padding-right:8px;}
         .cal-time-lbl{font-family:'Noto Sans JP',sans-serif;font-size:9px;color:var(--text-dim);letter-spacing:0.04em;margin-top:-6px;}
-        .cal-slot{height:60px;border-bottom:1px solid var(--card-border);position:relative;}
+        .cal-slot{height:60px;border-bottom:1px solid var(--card-border);position:relative;cursor:pointer;}
+        .cal-slot:hover{background:rgba(122,110,94,0.05);}
         .cal-slot-half{position:absolute;top:50%;left:0;right:0;border-top:1px dashed rgba(200,184,154,0.4);}
         .cal-event{position:absolute;left:2px;right:2px;border-radius:2px;padding:3px 5px;overflow:hidden;cursor:pointer;transition:opacity 0.15s;}
         .cal-event:hover{opacity:0.75;}
@@ -837,9 +838,11 @@
       const CAL_HOURS=Array.from({length:CAL_HE-CAL_HS},(_,i)=>CAL_HS+i);
       const CAL_EVT=(9-CAL_HS)*CAL_SH;
 
+      const [formOrigin,setFormOrigin] = useState("home");
       const sf=(k,v)=>setForm(f=>({...f,[k]:v}));
-      const openAdd=()=>{setForm({title:"",category:"Maintenance",priority:"Medium",status:"Outstanding",assignee:"",location:"",due:"",description:""});setErrs({});setEdit(false);setView("form");};
-      const openEdit=j=>{setForm({...j});setErrs({});setEdit(true);setView("form");};
+      const openAdd=()=>{setForm({title:"",category:"Maintenance",priority:"Medium",status:"Outstanding",assignee:"",location:"",due:"",scheduledTime:"",description:""});setErrs({});setEdit(false);setFormOrigin("home");setView("form");};
+      const openEdit=j=>{setForm({...j});setErrs({});setEdit(true);setFormOrigin("home");setView("form");};
+      const openCalAdd=(day,hour)=>{const due=ds(day);const scheduledTime=`${String(hour).padStart(2,"0")}:00`;setForm({title:"",category:"Maintenance",priority:"Medium",status:"Outstanding",assignee:"",location:"",due,scheduledTime,description:""});setErrs({});setEdit(false);setFormOrigin("calendar");setView("form");};
 
       const validate=()=>{
         const e={};
@@ -853,7 +856,7 @@
       const submitForm=()=>{
         if(!validate())return;
         if(edit){setJobs(js=>js.map(j=>j.id===form.id?{...form}:j));setSelId(form.id);setView("detail");notify("Changes saved");}
-        else{const nj={...form,id:uid.current++,created:today()};save("jc-uid",uid.current);setJobs(js=>[nj,...js]);setView("home");notify("Jobcard created");}
+        else{const nj={...form,id:uid.current++,created:today()};save("jc-uid",uid.current);setJobs(js=>[nj,...js]);if(formOrigin==="calendar"){setTab("calendar");setView("home");}else setView("home");notify("Jobcard created");}
       };
 
       const doDelete=()=>{setJobs(js=>js.filter(j=>j.id!==selId));setDelModal(false);setSelId(null);setView("home");notify("Deleted","err");};
@@ -966,13 +969,14 @@
                   </div>
                   {days.map((d,di)=>{
                     const dStr=ds(d); const dayJobs=calJobs.filter(j=>j.due===dStr);
-                    const evH=dayJobs.length>1?Math.max(Math.floor(52/dayJobs.length),18):52;
+                    const evH=52;
+                    const evTop=job=>{if(job.scheduledTime){const[h,m]=job.scheduledTime.split(":").map(Number);return(h+m/60-CAL_HS)*CAL_SH;}return CAL_EVT;};
                     return (
                       <div key={di} style={{flex:1,position:"relative",borderLeft:"1px solid var(--card-border)"}}>
-                        {CAL_HOURS.map(h=><div key={h} className="cal-slot"><div className="cal-slot-half"/></div>)}
-                        {dayJobs.map((job,ji)=>{const sc=SC[job.status];return(
-                          <div key={job.id} className="cal-event" style={{top:CAL_EVT+ji*evH,height:evH,background:sc.bg,border:`1px solid ${sc.border}`,color:sc.color}} onClick={()=>{setSelId(job.id);setTab("list");setView("detail");}}>
-                            <div className="cal-event-title">{job.title}</div>
+                        {CAL_HOURS.map(h=><div key={h} className="cal-slot" onClick={()=>openCalAdd(d,h)}><div className="cal-slot-half"/></div>)}
+                        {dayJobs.map((job)=>{const sc=SC[job.status];return(
+                          <div key={job.id} className="cal-event" style={{top:evTop(job),height:evH,background:sc.bg,border:`1px solid ${sc.border}`,color:sc.color}} onClick={e=>{e.stopPropagation();setSelId(job.id);setTab("list");setView("detail");}}>
+                            <div className="cal-event-title">{job.scheduledTime&&<span style={{opacity:0.7,marginRight:4}}>{job.scheduledTime}</span>}{job.title}</div>
                             {calView==="day"&&evH>=28&&<div className="cal-event-sub">{job.location} · {job.assignee||"Unassigned"}</div>}
                           </div>
                         );})}
@@ -1178,7 +1182,7 @@
               {job.description&&(<><BrushStroke variant={0} style={{marginBottom:16}}/><p style={{fontFamily:"'Noto Serif JP',serif",fontSize:14,fontWeight:300,color:"var(--text-sec)",lineHeight:1.9,marginBottom:24,paddingLeft:16,borderLeft:"1px solid var(--card-border)"}}>{job.description}</p></>)}
               <BrushStroke variant={2} style={{marginBottom:24}}/>
               <div className="detail-meta" style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:24}}>
-                {[{k:"Category",v:job.category},{k:"Location",v:job.location},{k:"Assignee",v:job.assignee||"Unassigned"},{k:"Created",v:fmtDate(job.created)},{k:"Due Date",v:fmtDate(job.due)}].map(({k,v})=>(
+                {[{k:"Category",v:job.category},{k:"Location",v:job.location},{k:"Assignee",v:job.assignee||"Unassigned"},{k:"Created",v:fmtDate(job.created)},{k:"Due Date",v:fmtDate(job.due)},...(job.scheduledTime?[{k:"Scheduled Time",v:job.scheduledTime}]:[])].map(({k,v})=>(
                   <div key={k}><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",marginBottom:6,fontWeight:500,textTransform:"uppercase"}}>{k}</div><div style={{fontFamily:"'Noto Serif JP',serif",fontSize:14,color:"var(--text-pri)",fontWeight:400}}>{v}</div></div>
                 ))}
               </div>
@@ -1225,7 +1229,7 @@
         <Page {...pg}>
           <CModal {...cm}/>
           <div style={{marginBottom:36}}>
-            <button className="ws-back" onClick={()=>setView(edit?"detail":"home")}>← Back</button>
+            <button className="ws-back" onClick={()=>{if(edit)setView("detail");else if(formOrigin==="calendar"){setTab("calendar");setView("home");}else setView("home");}}>← Back</button>
           </div>
           <div style={{marginBottom:36}}>
             <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.22em",color:"var(--text-dim)",marginBottom:10,fontWeight:300}}>{edit?"EDIT":"CREATE"}</div>
@@ -1239,13 +1243,14 @@
               <FG label="Priority"><CustomSelect value={form.priority||"Medium"} onChange={v=>sf("priority",v)} options={PRIS}/></FG>
               <FG label="Status"><CustomSelect value={form.status||"Outstanding"} onChange={v=>sf("status",v)} options={STATS}/></FG>
               <FG label="Due Date" error={errs.due}><input type="date" className="ws-input" value={form.due||""} onChange={e=>sf("due",e.target.value)} style={{borderColor:errs.due?"var(--aka)":undefined}}/></FG>
+              <FG label="Scheduled Time"><input type="time" className="ws-input" value={form.scheduledTime||""} onChange={e=>sf("scheduledTime",e.target.value)}/></FG>
               <FG label="Assignee" error={errs.assignee}><input className="ws-input" placeholder="Name or team…" value={form.assignee||""} onChange={e=>sf("assignee",e.target.value)} style={{borderColor:errs.assignee?"var(--aka)":undefined}}/></FG>
               <FG label="Location" error={errs.location}><input className="ws-input" placeholder="Building, floor, zone…" value={form.location||""} onChange={e=>sf("location",e.target.value)} style={{borderColor:errs.location?"var(--aka)":undefined}}/></FG>
               <FG label="Notes" full><textarea className="ws-input" style={{minHeight:90,resize:"vertical"}} placeholder="Context, hazards, special instructions…" value={form.description||""} onChange={e=>sf("description",e.target.value)}/></FG>
             </div>
             <BrushStroke variant={2} style={{marginBottom:24}}/>
             <div style={{display:"flex",justifyContent:"flex-end",gap:12}}>
-              <button className="ws-btn-ghost" onClick={()=>setView(edit?"detail":"home")}>Cancel</button>
+              <button className="ws-btn-ghost" onClick={()=>{if(edit)setView("detail");else if(formOrigin==="calendar"){setTab("calendar");setView("home");}else setView("home");}}>Cancel</button>
               <button className="ws-btn-primary" onClick={submitForm}>{edit?"Save":"Create"}</button>
             </div>
           </div>
