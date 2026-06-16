@@ -439,6 +439,85 @@
       );
     };
 
+    const SignaturePad = ({value, onChange}) => {
+      const canvasRef = useRef(null);
+      const drawing = useRef(false);
+
+      useEffect(()=>{
+        const canvas = canvasRef.current;
+        if(!canvas) return;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#f7f4ee";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        if(value){
+          const img = new Image();
+          img.onload = ()=>ctx.drawImage(img, 0, 0);
+          img.src = value;
+        }
+      },[]);
+
+      const getPos = (e, canvas) => {
+        const rect = canvas.getBoundingClientRect();
+        const src = e.touches ? e.touches[0] : e;
+        return {
+          x: (src.clientX - rect.left) * (canvas.width / rect.width),
+          y: (src.clientY - rect.top) * (canvas.height / rect.height)
+        };
+      };
+
+      const startDraw = e => {
+        drawing.current = true;
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext("2d");
+        const {x,y} = getPos(e, canvas);
+        ctx.beginPath(); ctx.moveTo(x, y);
+        e.preventDefault();
+      };
+
+      const draw = e => {
+        if(!drawing.current) return;
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext("2d");
+        const {x,y} = getPos(e, canvas);
+        ctx.lineTo(x, y);
+        ctx.strokeStyle = "#1c1a18"; ctx.lineWidth = 2.5;
+        ctx.lineCap = "round"; ctx.lineJoin = "round";
+        ctx.stroke();
+        e.preventDefault();
+      };
+
+      const endDraw = () => {
+        if(!drawing.current) return;
+        drawing.current = false;
+        onChange(canvasRef.current.toDataURL("image/png"));
+      };
+
+      const clear = () => {
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#f7f4ee";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        onChange(null);
+      };
+
+      return (
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          <canvas
+            ref={canvasRef}
+            width={540}
+            height={140}
+            style={{width:"100%",height:140,border:"1px solid var(--card-border)",borderRadius:2,cursor:"crosshair",touchAction:"none",display:"block",background:"#f7f4ee"}}
+            onMouseDown={startDraw} onMouseMove={draw} onMouseUp={endDraw} onMouseLeave={endDraw}
+            onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={endDraw}
+          />
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,color:"var(--text-dim)",letterSpacing:"0.1em"}}>Sign above with finger or stylus</span>
+            <button onClick={clear} style={{background:"none",border:"none",cursor:"pointer",fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,color:"var(--text-sec)",letterSpacing:"0.1em",padding:"4px 0"}} onMouseEnter={e=>e.currentTarget.style.color="var(--aka)"} onMouseLeave={e=>e.currentTarget.style.color="var(--text-sec)"}>Clear</button>
+          </div>
+        </div>
+      );
+    };
+
     const CModal = ({cModal,cTpl,cForm,setCModal,setCTpl,setCForm,cErrs,setCErrs,submitComplete}) => {
       if(!cModal) return null;
       const{job}=cModal;
@@ -496,6 +575,10 @@
                   <div>
                     <div style={lblStyle}>Additional Notes</div>
                     <textarea className="ws-input" style={{minHeight:80,resize:"vertical",fontFamily:"'Noto Serif JP',serif",fontSize:13,fontWeight:300,lineHeight:1.7}} placeholder="Any additional observations or notes…" value={cForm.additionalNotes||""} onChange={e=>sc2("additionalNotes",e.target.value)}/>
+                  </div>
+                  <div>
+                    <div style={{...lblStyle,marginBottom:10}}>Client Signature <span style={{color:"var(--text-dim)",fontWeight:300,letterSpacing:"0.04em",textTransform:"none"}}>(optional)</span></div>
+                    <SignaturePad value={cForm.signatureDataUrl} onChange={v=>sc2("signatureDataUrl",v)}/>
                   </div>
                 </div>
                 <BrushStroke variant={1} style={{margin:"28px 0 24px"}}/>
@@ -566,6 +649,13 @@
           lbl("Additional Notes",M,y);y+=5;
           const nl=val(report.additionalNotes,M,y,CW);y+=nl*6+8;
         }
+        if(report.signatureDataUrl){
+          if(y>240){doc.addPage();y=22;}
+          lbl("Client Signature",M,y);y+=5;
+          doc.setDrawColor(200,184,154);doc.setLineWidth(0.3);doc.rect(M,y,CW,28);
+          try{doc.addImage(report.signatureDataUrl,"PNG",M+2,y+2,CW-4,24);}catch(e){}
+          y+=34;
+        }
       } else {
         doc.setFontSize(11);doc.setTextColor(28,26,24);doc.setFont("helvetica","italic");
         doc.text("No completion report attached.",M,y); y+=12;
@@ -619,7 +709,7 @@
       const [showInstall,setShowInstall] = useState(false);
       const [cModal,setCModal] = useState(null);
       const [cTpl,setCTpl]    = useState(null);
-      const [cForm,setCForm]  = useState({arrivedAt:"",metWith:"",workCompleted:[""],workRemaining:[""],additionalNotes:""});
+      const [cForm,setCForm]  = useState({arrivedAt:"",metWith:"",workCompleted:[""],workRemaining:[""],additionalNotes:"",signatureDataUrl:null});
       const [cErrs,setCErrs]  = useState({});
       const [users,setUsersRaw]     = useState(()=>load("jc-users",[]));
       const [session,setSessionRaw] = useState(()=>load(SESSION_KEY,null));
@@ -700,7 +790,7 @@
         if(status==="Completed"){
           const base=job.inProgressAt?new Date(job.inProgressAt):new Date();
           const hh=String(base.getHours()).padStart(2,"0"),mm=String(base.getMinutes()).padStart(2,"0");
-          setCForm({arrivedAt:`${hh}:${mm}`,metWith:"",workCompleted:[""],workRemaining:[""],additionalNotes:""});
+          setCForm({arrivedAt:`${hh}:${mm}`,metWith:"",workCompleted:[""],workRemaining:[""],additionalNotes:"",signatureDataUrl:null});
           setCErrs({}); setCTpl(null); setCModal({job});
         } else {
           const updated={...job,status,...(status==="In Progress"&&!job.inProgressAt?{inProgressAt:new Date().toISOString()}:{})};
@@ -719,7 +809,7 @@
         }
         setCErrs({});
         const{job}=cModal;
-        const rpt=cTpl==="site-visit"?{templateType:"site-visit",arrivedAt:cForm.arrivedAt,metWith:cForm.metWith,workCompleted:cForm.workCompleted.filter(l=>l.trim()),workRemaining:cForm.workRemaining.filter(l=>l.trim()),additionalNotes:cForm.additionalNotes?.trim()||null}:null;
+        const rpt=cTpl==="site-visit"?{templateType:"site-visit",arrivedAt:cForm.arrivedAt,metWith:cForm.metWith,workCompleted:cForm.workCompleted.filter(l=>l.trim()),workRemaining:cForm.workRemaining.filter(l=>l.trim()),additionalNotes:cForm.additionalNotes?.trim()||null,signatureDataUrl:cForm.signatureDataUrl||null}:null;
         const completed={...job,status:"Completed",completionReport:rpt};
         setJobs(js=>js.map(j=>j.id===job.id?completed:j));
         generatePDF(completed,rpt);
@@ -730,15 +820,16 @@
         const h=await hashPw(pw,em);
         const u=users.find(u=>u.email.toLowerCase()===em.toLowerCase()&&u.pwHash===h);
         if(!u)return "Invalid email or password";
-        setSession({userId:u.id,email:u.email,name:u.name});
+        setSession({userId:u.id,email:u.email,name:u.name,isAdmin:u.isAdmin||false});
         return null;
       };
       const handleRegister = async(em,nm,pw)=>{
         if(users.some(u=>u.email.toLowerCase()===em.toLowerCase()))return "Email already in use";
         const h=await hashPw(pw,em);
-        const nu={id:Date.now(),email:em,name:nm,pwHash:h};
+        const isAdmin=users.length===0;
+        const nu={id:Date.now(),email:em,name:nm,pwHash:h,isAdmin};
         setUsersStore([...users,nu]);
-        setSession({userId:nu.id,email:nu.email,name:nu.name});
+        setSession({userId:nu.id,email:nu.email,name:nu.name,isAdmin});
         return null;
       };
       const handleSignOut=()=>setSession(null);
@@ -756,6 +847,7 @@
         <div className="tab-bar">
           <button className={`tab-btn${tab==="list"?" active":""}`} onClick={()=>{setTab("list");setView("home");}}>LIST</button>
           <button className={`tab-btn${tab==="calendar"?" active":""}`} onClick={()=>setTab("calendar")}>CALENDAR</button>
+          <button className={`tab-btn${tab==="settings"?" active":""}`} onClick={()=>setTab("settings")}>ACCOUNT</button>
         </div>
       );
 
@@ -836,24 +928,86 @@
         </Page>
       );
 
+      /* SETTINGS */
+      if(tab==="settings") return (
+        <Page {...pg}>
+          <TabNav/>
+          <div style={{maxWidth:480}}>
+            <div style={{marginBottom:36}}>
+              <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.24em",color:"var(--text-dim)",marginBottom:10,fontWeight:300}}>ACCOUNT</div>
+              <h2 style={{fontFamily:"'Noto Serif JP',serif",fontWeight:300,fontSize:28,color:"var(--text-pri)",letterSpacing:"0.04em"}}>Settings</h2>
+              <BrushStroke variant={1} style={{marginTop:12}}/>
+            </div>
+
+            <div className="ws-card" style={{padding:"24px 28px",borderRadius:2,marginBottom:16}}>
+              <SL s={0}>Profile</SL>
+              <div style={{display:"flex",flexDirection:"column",gap:14}}>
+                <div>
+                  <FL c="Name"/>
+                  <div style={{fontFamily:"'Noto Serif JP',serif",fontSize:15,color:"var(--text-pri)",fontWeight:400}}>{session.name}</div>
+                </div>
+                <div>
+                  <FL c="Email"/>
+                  <div style={{fontFamily:"'Noto Serif JP',serif",fontSize:14,color:"var(--text-sec)",fontWeight:300}}>{session.email}</div>
+                </div>
+                {session.isAdmin&&(
+                  <div style={{display:"inline-flex",alignItems:"center",gap:6,padding:"3px 10px",borderRadius:1,background:"rgba(55,74,106,0.08)",border:"1px solid rgba(55,74,106,0.25)",alignSelf:"flex-start"}}>
+                    <span style={{width:5,height:5,borderRadius:"50%",background:"var(--indigo)",display:"inline-block"}}/>
+                    <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,color:"var(--indigo)",letterSpacing:"0.12em",fontWeight:500}}>ADMINISTRATOR</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="ws-card" style={{padding:"24px 28px",borderRadius:2,marginBottom:16}}>
+              <SL s={1}>Appearance</SL>
+              <div style={{display:"flex",alignItems:"center",gap:12}}>
+                <ModeToggle/>
+                <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:12,color:"var(--text-sec)",fontWeight:300}}>{dark?"Dark mode enabled":"Light mode enabled"}</span>
+              </div>
+            </div>
+
+            {session.isAdmin&&(
+              <div className="ws-card" style={{padding:"24px 28px",borderRadius:2,marginBottom:16}}>
+                <SL s={2}>Registered Users</SL>
+                <div style={{display:"flex",flexDirection:"column"}}>
+                  {users.map((u,i)=>(
+                    <div key={u.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0",borderBottom:i<users.length-1?"1px solid var(--card-border)":"none"}}>
+                      <div>
+                        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
+                          <span style={{fontFamily:"'Noto Serif JP',serif",fontSize:14,color:"var(--text-pri)",fontWeight:400}}>{u.name}</span>
+                          {u.isAdmin&&<span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:8,color:"var(--indigo)",letterSpacing:"0.12em",fontWeight:500}}>ADMIN</span>}
+                        </div>
+                        <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,color:"var(--text-sec)",fontWeight:300}}>{u.email}</div>
+                      </div>
+                      {u.id!==session.userId&&(
+                        <button
+                          onClick={()=>{setUsersStore(users.filter(x=>x.id!==u.id));notify(`Removed ${u.name}`,"err");}}
+                          className="ws-btn-danger"
+                          style={{padding:"5px 12px",fontSize:10}}
+                        >Remove</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <BrushStroke variant={0} style={{margin:"8px 0 24px"}}/>
+            <button className="ws-btn-danger" onClick={handleSignOut} style={{letterSpacing:"0.12em"}}>Sign out</button>
+          </div>
+        </Page>
+      );
+
       /* HOME */
       if(view==="home") return (
         <Page {...pg}>
           <CModal {...cm}/>
           <TabNav/>
           <div style={{marginBottom:48}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
-              <div>
-                <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.24em",color:"var(--text-dim)",marginBottom:12,fontWeight:300}}>JOBCARD MANAGEMENT</div>
-                <h1 style={{fontFamily:"'Noto Serif JP',serif",fontWeight:300,fontSize:36,color:"var(--text-pri)",letterSpacing:"0.04em",lineHeight:1.2}}>Work Orders<span style={{display:"block",fontSize:14,color:"var(--text-sec)",fontWeight:300,marginTop:6,letterSpacing:"0.12em",fontFamily:"'Noto Sans JP',sans-serif"}}>Record of Works</span></h1>
-              </div>
-              <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:12}}>
-                <ModeToggle/>
-                <div style={{display:"flex",alignItems:"center",gap:10}}>
-                  <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,color:"var(--text-sec)",letterSpacing:"0.06em",fontWeight:300}}>{session.name}</span>
-                  <button onClick={handleSignOut} style={{background:"none",border:"1px solid var(--card-border)",cursor:"pointer",fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,color:"var(--text-dim)",letterSpacing:"0.08em",padding:"5px 10px",borderRadius:1,transition:"var(--trans)"}} onMouseEnter={e=>e.currentTarget.style.borderColor="var(--nori)"} onMouseLeave={e=>e.currentTarget.style.borderColor="var(--card-border)"}>Sign out</button>
-                </div>
-              </div>
+            <div style={{marginBottom:6}}>
+              <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.24em",color:"var(--text-dim)",marginBottom:12,fontWeight:300}}>JOBCARD MANAGEMENT</div>
+              <h1 style={{fontFamily:"'Noto Serif JP',serif",fontWeight:300,fontSize:36,color:"var(--text-pri)",letterSpacing:"0.04em",lineHeight:1.2}}>Work Orders<span style={{display:"block",fontSize:14,color:"var(--text-sec)",fontWeight:300,marginTop:6,letterSpacing:"0.12em",fontFamily:"'Noto Sans JP',sans-serif"}}>Record of Works</span></h1>
             </div>
             <BrushStroke variant={1} style={{marginTop:16}}/>
           </div>
@@ -873,16 +1027,17 @@
             </div>
           </div>
 
-          <SL s={2}>{list.length} Work Order{list.length!==1?"s":""}{fSt!=="All"?` · ${fSt}`:""}</SL>
+          <div style={{marginBottom:18}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+              <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.18em",color:"var(--text-sec)",fontWeight:500,textTransform:"uppercase"}}>{list.length} Work Order{list.length!==1?"s":""}{fSt!=="All"?` · ${fSt}`:""}</span>
+              <button className="ws-btn-primary" onClick={openAdd} style={{fontSize:10,padding:"8px 16px",letterSpacing:"0.14em"}}>+ New Jobcard</button>
+            </div>
+            <BrushStroke variant={2}/>
+          </div>
 
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
             {list.length===0&&(<div style={{textAlign:"center",padding:"64px 20px"}}><InkBlot size={56} opacity={0.08} style={{margin:"0 auto 20px"}}/><div style={{fontFamily:"'Noto Serif JP',serif",fontSize:16,color:"var(--text-dim)",fontWeight:300,letterSpacing:"0.08em"}}>No records found</div></div>)}
             {list.map((job,i)=><JobRow key={job.id} job={job} delay={i*55} onClick={()=>{setSelId(job.id);setView("detail");}}/>)}
-            <div className="ws-card-hover" onClick={openAdd} style={{background:"var(--card-bg)",border:"1px dashed var(--card-border)",borderRadius:2,padding:"28px 24px",display:"flex",alignItems:"center",justifyContent:"center",gap:16,cursor:"pointer",transition:"var(--trans)",marginTop:list.length>0?0:0}}>
-              <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.2em",color:"var(--text-dim)",textTransform:"uppercase",opacity:0.5}}>New</span>
-              <span style={{fontFamily:"'Noto Serif JP',serif",fontSize:30,fontWeight:300,color:"var(--text-dim)",lineHeight:1,opacity:0.4}}>+</span>
-              <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.2em",color:"var(--text-dim)",textTransform:"uppercase",opacity:0.5}}>Jobcard</span>
-            </div>
           </div>
         </Page>
       );
@@ -912,7 +1067,6 @@
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:36}}>
               <button className="ws-back" onClick={()=>setView("home")}>← Back</button>
               <div className="nav-actions" style={{display:"flex",alignItems:"center",gap:16}}>
-                <ModeToggle/>
                 <button className="ws-btn-ghost" onClick={()=>openEdit(job)}>Edit</button>
                 <button className="ws-btn-danger" onClick={()=>setDelModal(true)}>Delete</button>
               </div>
@@ -953,6 +1107,7 @@
                     {r.workCompleted&&r.workCompleted.length>0&&(<div><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.16em",color:"var(--text-dim)",fontWeight:500,textTransform:"uppercase",marginBottom:8}}>Work Completed</div><ul style={{listStyle:"none",padding:0,display:"flex",flexDirection:"column",gap:5}}>{r.workCompleted.map((it,i)=><li key={i} style={{display:"flex",gap:10,alignItems:"flex-start"}}><span style={{color:"var(--matcha)",flexShrink:0,fontSize:15,lineHeight:1.5}}>•</span><span style={{fontFamily:"'Noto Serif JP',serif",fontSize:13,color:"var(--text-pri)",fontWeight:300,lineHeight:1.7}}>{it}</span></li>)}</ul></div>)}
                     {r.workRemaining&&r.workRemaining.length>0&&(<div><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.16em",color:"var(--text-dim)",fontWeight:500,textTransform:"uppercase",marginBottom:8}}>Work Remaining</div><ul style={{listStyle:"none",padding:0,display:"flex",flexDirection:"column",gap:5}}>{r.workRemaining.map((it,i)=><li key={i} style={{display:"flex",gap:10,alignItems:"flex-start"}}><span style={{color:"var(--ki)",flexShrink:0,fontSize:15,lineHeight:1.5}}>•</span><span style={{fontFamily:"'Noto Serif JP',serif",fontSize:13,color:"var(--text-pri)",fontWeight:300,lineHeight:1.7}}>{it}</span></li>)}</ul></div>)}
                     {r.additionalNotes&&(<div><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.16em",color:"var(--text-dim)",fontWeight:500,textTransform:"uppercase",marginBottom:5}}>Additional Notes</div><p style={{fontFamily:"'Noto Serif JP',serif",fontSize:13,color:"var(--text-pri)",fontWeight:300,lineHeight:1.8,margin:0}}>{r.additionalNotes}</p></div>)}
+                    {r.signatureDataUrl&&(<div><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.16em",color:"var(--text-dim)",fontWeight:500,textTransform:"uppercase",marginBottom:8}}>Client Signature</div><img src={r.signatureDataUrl} alt="Client signature" style={{maxWidth:"100%",height:"auto",maxHeight:80,border:"1px solid var(--card-border)",borderRadius:2,background:"#f7f4ee",display:"block"}}/></div>)}
                   </div>
                   <BrushStroke variant={2} style={{margin:"20px 0 16px"}}/>
                   <div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:14,color:"var(--matcha)"}}>✓</span><span style={{fontFamily:"'Noto Serif JP',serif",fontSize:12,color:"var(--matcha)",letterSpacing:"0.06em"}}>Jobcard complete</span></div>
@@ -976,9 +1131,8 @@
       if(view==="form") return (
         <Page {...pg}>
           <CModal {...cm}/>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:36}}>
+          <div style={{marginBottom:36}}>
             <button className="ws-back" onClick={()=>setView(edit?"detail":"home")}>← Back</button>
-            <ModeToggle/>
           </div>
           <div style={{marginBottom:36}}>
             <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.22em",color:"var(--text-dim)",marginBottom:10,fontWeight:300}}>{edit?"EDIT":"CREATE"}</div>
