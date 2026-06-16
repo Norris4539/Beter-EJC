@@ -217,6 +217,14 @@
     const PRIS=["Low","Medium","High","Critical"];
     const CATS=["Maintenance","Repair","Installation","Inspection","Electrical","Plumbing","Other"];
     const STATS=["Outstanding","In Progress","On Hold","Completed"];
+    const SMTP_PROVIDERS=[
+      {label:"Gmail",            host:"smtp.gmail.com",           port:"587",secure:false},
+      {label:"Outlook / Hotmail",host:"smtp-mail.outlook.com",    port:"587",secure:false},
+      {label:"Office 365",       host:"smtp.office365.com",        port:"587",secure:false},
+      {label:"Yahoo Mail",       host:"smtp.mail.yahoo.com",       port:"465",secure:true},
+      {label:"Zoho Mail",        host:"smtp.zoho.com",             port:"587",secure:false},
+      {label:"Custom",           host:"",                          port:"587",secure:false},
+    ];
 
     const SEED=[
       {id:1,title:"Replace HVAC Filter — Unit B3",category:"Maintenance",priority:"High",status:"Outstanding",assignee:"Marcus Chen",location:"Building B, Floor 3",created:"2026-06-01",due:"2026-06-07",description:"Monthly filter replacement overdue. Air quality reports flagging elevated particulates.",recipientEmail:""},
@@ -792,9 +800,10 @@
       const setSession = s=>{setSessionRaw(s);save(SESSION_KEY,s);};
       const setUsersStore = u=>{setUsersRaw(u);save("jc-users",u);};
       const uid = useRef(load("jc-uid",5));
-      const [emailCfg,setEmailCfgRaw] = useState(()=>load("jc-email-config",{endpointUrl:"",senderName:""}));
+      const EMAIL_CFG_DEF={endpointUrl:"",senderName:"",provider:"Gmail",host:"smtp.gmail.com",port:"587",secure:false,smtpUser:"",smtpPass:""};
+      const [emailCfg,setEmailCfgRaw] = useState(()=>load("jc-email-config",EMAIL_CFG_DEF));
       const setEmailCfg = c=>{setEmailCfgRaw(c);save("jc-email-config",c);};
-      const [eCfg,setECfg] = useState(()=>load("jc-email-config",{endpointUrl:"",senderName:""}));
+      const [eCfg,setECfg] = useState(()=>({...EMAIL_CFG_DEF,...load("jc-email-config",{})}));
       const [tab,setTab]         = useState("list");
       const [calView,setCalView] = useState("week");
       const [calDate,setCalDate] = useState(()=>new Date());
@@ -887,7 +896,7 @@
           const res = await fetch(emailCfg.endpointUrl, {
             method:"POST",
             headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({to:job.recipientEmail,subject:`Completion Report: ${job.title}`,senderName:emailCfg.senderName||"JobFlow",pdfBase64,filename,jobId:job.id,jobTitle:job.title})
+            body:JSON.stringify({to:job.recipientEmail,subject:`Completion Report: ${job.title}`,senderName:emailCfg.senderName||"JobFlow",pdfBase64,filename,jobId:job.id,jobTitle:job.title,smtpHost:emailCfg.host,smtpPort:parseInt(emailCfg.port)||587,smtpSecure:emailCfg.secure||false,smtpUser:emailCfg.smtpUser,smtpPass:emailCfg.smtpPass})
           });
           const data = await res.json();
           if(data.success) notify(`Report emailed to ${job.recipientEmail}`);
@@ -1114,10 +1123,29 @@
 
             {session.isAdmin&&(
               <div className="ws-card" style={{padding:"24px 28px",borderRadius:2,marginBottom:16}}>
-                <SL s={1}>Email Notifications</SL>
+                <SL s={1}>Email / SMTP</SL>
                 <div style={{display:"flex",flexDirection:"column",gap:14}}>
-                  <FG label="Proxy Endpoint URL"><input className="ws-input" placeholder="https://…/send-email" value={eCfg.endpointUrl||""} onChange={e=>setECfg(c=>({...c,endpointUrl:e.target.value}))}/></FG>
+                  <FG label="Proxy Endpoint URL"><input className="ws-input" placeholder="https://….netlify.app/.netlify/functions/send-email" value={eCfg.endpointUrl||""} onChange={e=>setECfg(c=>({...c,endpointUrl:e.target.value}))}/></FG>
                   <FG label="Sender Display Name"><input className="ws-input" placeholder="JobFlow Notifications" value={eCfg.senderName||""} onChange={e=>setECfg(c=>({...c,senderName:e.target.value}))}/></FG>
+                  <FG label="SMTP Provider">
+                    <CustomSelect
+                      value={eCfg.provider||"Gmail"}
+                      onChange={v=>{const p=SMTP_PROVIDERS.find(x=>x.label===v);setECfg(c=>({...c,provider:v,...(p&&p.label!=="Custom"?{host:p.host,port:p.port,secure:p.secure}:{})}));}}
+                      options={SMTP_PROVIDERS.map(p=>({value:p.label,label:p.label}))}
+                    />
+                  </FG>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 88px",gap:12}}>
+                    <FG label="SMTP Host"><input className="ws-input" placeholder="smtp.gmail.com" value={eCfg.host||""} onChange={e=>setECfg(c=>({...c,host:e.target.value,provider:"Custom"}))}/></FG>
+                    <FG label="Port"><input className="ws-input" placeholder="587" value={eCfg.port||""} onChange={e=>setECfg(c=>({...c,port:e.target.value,provider:"Custom"}))}/></FG>
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <div className="ws-toggle-track" onClick={()=>setECfg(c=>({...c,secure:!c.secure,provider:"Custom"}))} role="switch" aria-checked={eCfg.secure} tabIndex={0} onKeyDown={e=>e.key===" "&&setECfg(c=>({...c,secure:!c.secure,provider:"Custom"}))}>
+                      <div className={`ws-toggle-knob${eCfg.secure?" on":""}`}/>
+                    </div>
+                    <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,color:"var(--text-sec)",fontWeight:300}}>{eCfg.secure?"SSL / TLS (port 465)":"STARTTLS (port 587)"}</span>
+                  </div>
+                  <FG label="SMTP Username"><input className="ws-input" placeholder="your@email.com" value={eCfg.smtpUser||""} onChange={e=>setECfg(c=>({...c,smtpUser:e.target.value}))}/></FG>
+                  <FG label="SMTP Password / App Password"><input type="password" className="ws-input" placeholder="••••••••••••" value={eCfg.smtpPass||""} onChange={e=>setECfg(c=>({...c,smtpPass:e.target.value}))}/></FG>
                   <button className="ws-btn-primary" style={{alignSelf:"flex-start",fontSize:11,padding:"9px 20px",letterSpacing:"0.12em"}} onClick={()=>{setEmailCfg(eCfg);notify("Email settings saved");}}>Save</button>
                 </div>
               </div>

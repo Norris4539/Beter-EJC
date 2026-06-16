@@ -16,26 +16,32 @@ exports.handler = async (event) => {
   }
 
   try {
-    const { to, subject, senderName, pdfBase64, filename } = JSON.parse(event.body);
+    const {
+      to, subject, senderName, pdfBase64, filename,
+      smtpHost, smtpPort, smtpSecure, smtpUser, smtpPass,
+    } = JSON.parse(event.body);
 
     if (!to || !pdfBase64) {
       return { statusCode: 400, headers, body: JSON.stringify({ success: false, error: "Missing required fields" }) };
     }
 
+    const host = smtpHost || process.env.SMTP_HOST || "smtp.gmail.com";
+    const port = smtpPort || parseInt(process.env.SMTP_PORT) || 587;
+    const secure = smtpSecure !== undefined ? smtpSecure : (process.env.SMTP_SECURE === "true");
+    const user = smtpUser || process.env.SMTP_USER;
+    const pass = smtpPass || process.env.SMTP_PASS;
+
     const transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 587,
-      secure: false,
-      auth: {
-        user: process.env.GMAIL_USER,
-        pass: process.env.GMAIL_APP_PASSWORD,
-      },
+      host,
+      port,
+      secure,
+      auth: { user, pass },
     });
 
     const base64Data = pdfBase64.includes(",") ? pdfBase64.split(",")[1] : pdfBase64;
 
     await transporter.sendMail({
-      from: `"${senderName || "JobFlow"}" <${process.env.GMAIL_USER}>`,
+      from: `"${senderName || "JobFlow"}" <${user}>`,
       to,
       subject,
       text: "Please find the completion report attached.",
