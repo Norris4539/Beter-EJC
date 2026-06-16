@@ -399,6 +399,95 @@
       );
     };
 
+    const ContactSelect = ({value, onChange, contacts, onContactsChange, placeholder="Select contact…"}) => {
+      const [open,setOpen]    = useState(false);
+      const [adding,setAdding]= useState(false);
+      const [newC,setNewC]    = useState({name:"",phone:"",email:""});
+      const [editId,setEditId]= useState(null);
+      const [editC,setEditC]  = useState({});
+      const ref = useRef(null);
+      useEffect(()=>{
+        if(!open)return;
+        const h=e=>{if(ref.current&&!ref.current.contains(e.target)){setOpen(false);setAdding(false);setEditId(null);}};
+        document.addEventListener("mousedown",h);document.addEventListener("touchstart",h);
+        return()=>{document.removeEventListener("mousedown",h);document.removeEventListener("touchstart",h);};
+      },[open]);
+      const select=c=>{onChange({name:c.name,phone:c.phone||"",email:c.email||""});setOpen(false);};
+      const addContact=()=>{
+        if(!newC.name.trim())return;
+        const nc={...newC,id:Date.now()};
+        onContactsChange([...contacts,nc]);
+        onChange({name:nc.name,phone:nc.phone||"",email:nc.email||""});
+        setNewC({name:"",phone:"",email:""});setAdding(false);setOpen(false);
+      };
+      const deleteContact=(e,id)=>{
+        e.stopPropagation();
+        const next=contacts.filter(c=>c.id!==id);
+        onContactsChange(next);
+        if(value?.name===contacts.find(c=>c.id===id)?.name) onChange({name:"",phone:"",email:""});
+      };
+      const startEdit=(e,c)=>{e.stopPropagation();setEditId(c.id);setEditC({...c});};
+      const saveEdit=e=>{
+        e.stopPropagation();
+        if(!editC.name.trim())return;
+        const next=contacts.map(c=>c.id===editId?{...editC}:c);
+        onContactsChange(next);
+        if(value?.name===contacts.find(c=>c.id===editId)?.name) onChange({name:editC.name,phone:editC.phone||"",email:editC.email||""});
+        setEditId(null);
+      };
+      const inp={className:"ws-input",style:{padding:"6px 10px",fontSize:12,marginBottom:0}};
+      return (
+        <div ref={ref} className="cs-wrap">
+          <button className="cs-btn" onClick={()=>{setOpen(o=>!o);setAdding(false);setEditId(null);}}>
+            <span style={{color:value?.name?"inherit":"var(--text-dim)"}}>{value?.name||placeholder}</span>
+            {value?.name&&<span style={{marginLeft:"auto",color:"var(--text-dim)",fontSize:11,lineHeight:1}} onClick={e=>{e.stopPropagation();onChange({name:"",phone:"",email:""});}}>✕</span>}
+            <svg width="10" height="6" viewBox="0 0 10 6" style={{transform:open?"rotate(180deg)":"none",transition:"transform 0.2s",flexShrink:0}}><polyline points="1,1 5,5 9,1" fill="none" stroke="var(--text-dim)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </button>
+          {open&&(
+            <div className="cs-list">
+              {contacts.map(c=>(
+                editId===c.id?(
+                  <div key={c.id} className="cs-edit-row" onClick={e=>e.stopPropagation()} style={{flexDirection:"column",gap:5,padding:"10px 12px"}}>
+                    <input {...inp} placeholder="Name *" value={editC.name} onChange={e=>setEditC(x=>({...x,name:e.target.value}))} autoFocus/>
+                    <input {...inp} placeholder="Phone (optional)" value={editC.phone||""} onChange={e=>setEditC(x=>({...x,phone:e.target.value}))}/>
+                    <input {...inp} placeholder="Email (optional)" value={editC.email||""} onChange={e=>setEditC(x=>({...x,email:e.target.value}))}/>
+                    <div style={{display:"flex",gap:6,marginTop:2}}>
+                      <button className="cs-item-action" onClick={saveEdit} style={{color:"var(--matcha)",opacity:1}}>✓ Save</button>
+                      <button className="cs-item-action" onClick={e=>{e.stopPropagation();setEditId(null);}}>✕</button>
+                    </div>
+                  </div>
+                ):(
+                  <div key={c.id} className={`cs-item${value?.name===c.name?" sel":""}`} style={{justifyContent:"space-between"}} onClick={()=>select(c)}>
+                    <span style={{display:"flex",flexDirection:"column",alignItems:"flex-start",minWidth:0,gap:1}}>
+                      <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</span>
+                      {c.phone&&<span style={{fontSize:9,color:"var(--text-dim)",fontFamily:"'Noto Sans JP',sans-serif"}}>{c.phone}</span>}
+                    </span>
+                    <span className="cs-item-actions">
+                      <button className="cs-item-action" title="Edit" onClick={e=>startEdit(e,c)}>✎</button>
+                      <button className="cs-item-action del" title="Delete" onClick={e=>deleteContact(e,c.id)}>✕</button>
+                    </span>
+                  </div>
+                )
+              ))}
+              {adding?(
+                <div className="cs-edit-row" onClick={e=>e.stopPropagation()} style={{flexDirection:"column",gap:5,padding:"10px 12px"}}>
+                  <input {...inp} placeholder="Name *" value={newC.name} onChange={e=>setNewC(x=>({...x,name:e.target.value}))} autoFocus/>
+                  <input {...inp} placeholder="Phone (optional)" value={newC.phone} onChange={e=>setNewC(x=>({...x,phone:e.target.value}))}/>
+                  <input {...inp} placeholder="Email (optional)" value={newC.email} onChange={e=>setNewC(x=>({...x,email:e.target.value}))}/>
+                  <div style={{display:"flex",gap:6,marginTop:2}}>
+                    <button className="cs-item-action" onClick={addContact} style={{color:"var(--matcha)",opacity:1}}>✓ Add</button>
+                    <button className="cs-item-action" onClick={e=>{e.stopPropagation();setAdding(false);}}>✕</button>
+                  </div>
+                </div>
+              ):(
+                <div className="cs-add-row" onClick={e=>{e.stopPropagation();setAdding(true);}}>＋ Add contact</div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    };
+
     const SignIn = ({users, onSignIn, onRegister}) => {
       const dark = load("jc-dark",false);
       const [mode, setMode] = useState(users.length===0?"register":"login");
@@ -878,6 +967,8 @@
       const setAssignees                 = v=>{setAssigneesRaw(v);save("jc-assignees",v);};
       const [locations,setLocationsRaw] = useState(()=>load("jc-locations",SEED_LOCATIONS));
       const setLocations                 = v=>{setLocationsRaw(v);save("jc-locations",v);};
+      const [contacts,setContactsRaw] = useState(()=>load("jc-contacts",[]));
+      const setContacts = v=>{setContactsRaw(v);save("jc-contacts",v);};
       const EMAIL_CFG_DEF={endpointUrl:"",senderName:"",provider:"Gmail",host:"smtp.gmail.com",port:"587",secure:false,smtpUser:"",smtpPass:""};
       const [emailCfg,setEmailCfgRaw] = useState(()=>load("jc-email-config",EMAIL_CFG_DEF));
       const setEmailCfg = c=>{setEmailCfgRaw(c);save("jc-email-config",c);};
@@ -886,6 +977,9 @@
       const [calView,setCalView] = useState("week");
       const [calDate,setCalDate] = useState(()=>new Date());
       const calScrollRef         = useRef(null);
+      const [calMode,setCalMode]                     = useState("individual");
+      const [teamAssignees,setTeamAssignees]         = useState(()=>load("jc-assignees",SEED_ASSIGNEES).filter(a=>a!=="Unassigned").slice(0,4));
+      const [calAssigneeFilter,setCalAssigneeFilter] = useState("All");
 
       const setJobs = u => setJobsRaw(p=>{ const n=typeof u==="function"?u(p):u; save("jc-jobs",n); return n; });
       const setDark = v => { const d=typeof v==="function"?v(dark):v; setDarkRaw(d); save("jc-dark",d); };
@@ -922,7 +1016,7 @@
 
       const cnts={Outstanding:jobs.filter(j=>j.status==="Outstanding").length,"In Progress":jobs.filter(j=>j.status==="In Progress").length,"On Hold":jobs.filter(j=>j.status==="On Hold").length};
 
-      const calJobs=jobs.filter(j=>fSt==="All"||j.status===fSt).filter(j=>fPr==="All"||j.priority===fPr).filter(j=>{if(!srch)return true;const q=srch.toLowerCase();return j.title.toLowerCase().includes(q)||j.assignee.toLowerCase().includes(q)||j.category.toLowerCase().includes(q);});
+      const calJobs=jobs.filter(j=>fSt==="All"||j.status===fSt).filter(j=>fPr==="All"||j.priority===fPr).filter(j=>{if(!srch)return true;const q=srch.toLowerCase();return j.title.toLowerCase().includes(q)||j.assignee.toLowerCase().includes(q)||j.category.toLowerCase().includes(q);}).filter(j=>{if(calMode==="individual"&&calAssigneeFilter!=="All")return j.assignee===calAssigneeFilter;if(calMode==="team")return teamAssignees.includes(j.assignee);return true;});
       const ds=d=>{const dt=new Date(d);return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;};
       const wkStart=d=>{const dt=new Date(d);const day=dt.getDay();dt.setDate(dt.getDate()+(day===0?-6:1-day));return dt;};
       const wkDays=d=>Array.from({length:7},(_,i)=>{const dt=new Date(wkStart(d));dt.setDate(dt.getDate()+i);return dt;});
@@ -933,9 +1027,9 @@
 
       const [formOrigin,setFormOrigin] = useState("home");
       const sf=(k,v)=>setForm(f=>({...f,[k]:v}));
-      const openAdd=()=>{setForm({invoiceNo:"",title:"",category:cats[0]||"Maintenance",priority:"Medium",status:"Outstanding",assignee:assignees[0]||"",location:locations[0]||"",due:"",scheduledTime:"",description:"",recipientEmail:""});setErrs({});setEdit(false);setFormOrigin("home");setView("form");};
+      const openAdd=()=>{setForm({invoiceNo:"",title:"",category:cats[0]||"Maintenance",priority:"Medium",status:"Outstanding",assignee:assignees[0]||"",location:locations[0]||"",due:"",scheduledTime:"",description:"",recipientEmail:"",contact:{name:"",phone:"",email:""}});setErrs({});setEdit(false);setFormOrigin("home");setView("form");};
       const openEdit=j=>{setForm({...j});setErrs({});setEdit(true);setFormOrigin("home");setView("form");};
-      const openCalAdd=(day,hour)=>{const due=ds(day);const scheduledTime=`${String(hour).padStart(2,"0")}:00`;setForm({invoiceNo:"",title:"",category:cats[0]||"Maintenance",priority:"Medium",status:"Outstanding",assignee:assignees[0]||"",location:locations[0]||"",due,scheduledTime,description:"",recipientEmail:""});setErrs({});setEdit(false);setFormOrigin("calendar");setView("form");};
+      const openCalAdd=(day,hour,assigneeOverride)=>{const due=ds(day);const scheduledTime=`${String(hour).padStart(2,"0")}:00`;const defaultAssignee=assigneeOverride||(calMode==="individual"&&calAssigneeFilter!=="All"?calAssigneeFilter:assignees[0]||"");setForm({invoiceNo:"",title:"",category:cats[0]||"Maintenance",priority:"Medium",status:"Outstanding",assignee:defaultAssignee,location:locations[0]||"",due,scheduledTime,description:"",recipientEmail:"",contact:{name:"",phone:"",email:""}});setErrs({});setEdit(false);setFormOrigin("calendar");setView("form");};
 
       const validate=()=>{
         const e={};
@@ -1048,55 +1142,125 @@
           ?calDate.toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"})
           :(()=>{const dd=wkDays(calDate);const f=dd[0],l=dd[6];const ma=f.toLocaleDateString("en-GB",{month:"short"}),mb=l.toLocaleDateString("en-GB",{month:"short"});return ma===mb?`${ma} ${f.getDate()}–${l.getDate()}, ${f.getFullYear()}`:`${ma} ${f.getDate()} – ${mb} ${l.getDate()}, ${f.getFullYear()}`;})();
         const go=n=>{const d=new Date(calDate);d.setDate(d.getDate()+n*(calView==="week"?7:1));setCalDate(d);};
+        const ASGN_COLORS=["#374a6a","#4e6846","#8b7228","#8b3a2a","#7a6e5e"];
+        const aColor=name=>ASGN_COLORS[Math.max(0,assignees.indexOf(name))%ASGN_COLORS.length];
+        const evH=52;
+        const evTop=job=>{if(job.scheduledTime){const[h,m]=job.scheduledTime.split(":").map(Number);return(h+m/60-CAL_HS)*CAL_SH;}return CAL_EVT;};
+        const EventEl=({job,hideAssigneeName=false})=>{
+          const sc=SC[job.status];
+          return(
+            <div className="cal-event" style={{top:evTop(job),height:evH,background:sc.bg,border:`1px solid ${sc.border}`,color:sc.color,...(calMode==="team"?{borderLeft:`3px solid ${aColor(job.assignee)}`}:{})}}
+              onClick={e=>{e.stopPropagation();setSelId(job.id);setTab("list");setView("detail");}}>
+              <div className="cal-event-title">
+                {calMode==="team"&&!hideAssigneeName&&<span style={{color:aColor(job.assignee),fontWeight:700,marginRight:3,fontSize:8}}>{job.assignee.split(" ")[0]}</span>}
+                {job.scheduledTime&&<span style={{opacity:0.7,marginRight:4}}>{job.scheduledTime}</span>}
+                {job.title}
+              </div>
+              {evH>=28&&<div className="cal-event-sub">{job.location}</div>}
+            </div>
+          );
+        };
+        const activeCols=calMode==="team"?(teamAssignees.length>0?teamAssignees:assignees.filter(a=>a!=="Unassigned")):null;
         return (
           <div className="cal-wrap">
             <div className="cal-toolbar">
-              <div className="cal-nav">
-                <button className="cal-nav-btn" onClick={()=>go(-1)}>‹ Prev</button>
-                <button className="cal-nav-btn" onClick={()=>setCalDate(new Date())}>Today</button>
-                <button className="cal-nav-btn" onClick={()=>go(1)}>Next ›</button>
-              </div>
-              <span className="cal-period">{pLabel}</span>
-              <div className="cal-view-toggle">
-                <button className={`cal-view-btn${calView==="week"?" active":""}`} onClick={()=>setCalView("week")}>WEEK</button>
-                <button className={`cal-view-btn${calView==="day"?" active":""}`} onClick={()=>setCalView("day")}>DAY</button>
-              </div>
-            </div>
-            <div className="cal-grid-outer">
-              <div style={{display:"grid",gridTemplateColumns:`44px repeat(${cols},1fr)`,borderBottom:"1px solid var(--card-border)"}}>
-                <div/>
-                {days.map((d,i)=>(
-                  <div key={i} className={`cal-day-hdr${isToday(d)?" today":""}`}>
-                    <span className="cal-day-name">{calView==="week"?DAY_ABB[i]:d.toLocaleDateString("en-GB",{weekday:"short"}).toUpperCase()}</span>
-                    <span className={`cal-day-num${isToday(d)?" today-num":""}`}>{d.getDate()}</span>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",flexWrap:"wrap",gap:12}}>
+                <div className="cal-nav">
+                  <button className="cal-nav-btn" onClick={()=>go(-1)}>‹ Prev</button>
+                  <button className="cal-nav-btn" onClick={()=>setCalDate(new Date())}>Today</button>
+                  <button className="cal-nav-btn" onClick={()=>go(1)}>Next ›</button>
+                </div>
+                <span className="cal-period">{pLabel}</span>
+                <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                  <div className="cal-view-toggle">
+                    <button className={`cal-view-btn${calMode==="individual"?" active":""}`} onClick={()=>setCalMode("individual")}>INDIV</button>
+                    <button className={`cal-view-btn${calMode==="team"?" active":""}`} onClick={()=>setCalMode("team")}>TEAM</button>
                   </div>
-                ))}
-              </div>
-              <div className="cal-scroll" ref={calScrollRef}>
-                <div style={{display:"flex"}}>
-                  <div style={{width:44,flexShrink:0}}>
-                    {CAL_HOURS.map(h=><div key={h} className="cal-time-cell"><span className="cal-time-lbl">{h}:00</span></div>)}
+                  <div className="cal-view-toggle">
+                    <button className={`cal-view-btn${calView==="week"?" active":""}`} onClick={()=>setCalView("week")}>WEEK</button>
+                    <button className={`cal-view-btn${calView==="day"?" active":""}`} onClick={()=>setCalView("day")}>DAY</button>
                   </div>
-                  {days.map((d,di)=>{
-                    const dStr=ds(d); const dayJobs=calJobs.filter(j=>j.due===dStr);
-                    const evH=52;
-                    const evTop=job=>{if(job.scheduledTime){const[h,m]=job.scheduledTime.split(":").map(Number);return(h+m/60-CAL_HS)*CAL_SH;}return CAL_EVT;};
-                    return (
-                      <div key={di} style={{flex:1,position:"relative",borderLeft:"1px solid var(--card-border)"}}>
-                        {CAL_HOURS.map(h=><div key={h} className="cal-slot" onClick={()=>openCalAdd(d,h)}><div className="cal-slot-half"/></div>)}
-                        {dayJobs.map((job)=>{const sc=SC[job.status];return(
-                          <div key={job.id} className="cal-event" style={{top:evTop(job),height:evH,background:sc.bg,border:`1px solid ${sc.border}`,color:sc.color}} onClick={e=>{e.stopPropagation();setSelId(job.id);setTab("list");setView("detail");}}>
-                            <div className="cal-event-title">{job.scheduledTime&&<span style={{opacity:0.7,marginRight:4}}>{job.scheduledTime}</span>}{job.title}</div>
-                            {calView==="day"&&evH>=28&&<div className="cal-event-sub">{job.location} · {job.assignee||"Unassigned"}</div>}
-                          </div>
-                        );})}
-                        {isToday(d)&&showNow&&<div className="cal-now-line" style={{top:nowPx}}><div className="cal-now-dot"/></div>}
-                      </div>
+                </div>
+              </div>
+              {calMode==="individual"&&(
+                <div style={{width:"100%",marginTop:8}}>
+                  <CustomSelect value={calAssigneeFilter} onChange={setCalAssigneeFilter} options={[{value:"All",label:"All Assignees"},...assignees.map(a=>({value:a,label:a}))]}/>
+                </div>
+              )}
+              {calMode==="team"&&(
+                <div style={{display:"flex",flexWrap:"wrap",gap:6,width:"100%",marginTop:8}}>
+                  {assignees.filter(a=>a!=="Unassigned").map(a=>{
+                    const sel=teamAssignees.includes(a);
+                    const c=aColor(a);
+                    return(
+                      <button key={a} onClick={()=>setTeamAssignees(ts=>sel?ts.filter(x=>x!==a):[...ts,a])}
+                        style={{padding:"4px 10px",border:`1px solid ${sel?c:"var(--card-border)"}`,borderRadius:1,background:sel?`${c}18`:"transparent",color:sel?c:"var(--text-dim)",fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.08em",cursor:"pointer",transition:"all 0.15s"}}>
+                        {a.split(" ")[0]}
+                      </button>
                     );
                   })}
                 </div>
-              </div>
+              )}
             </div>
+            {calMode==="team"&&calView==="day"&&activeCols&&activeCols.length>0?(
+              <div className="cal-grid-outer">
+                <div style={{display:"grid",gridTemplateColumns:`44px repeat(${activeCols.length},1fr)`,borderBottom:"1px solid var(--card-border)"}}>
+                  <div/>
+                  {activeCols.map(a=>(
+                    <div key={a} className="cal-day-hdr">
+                      <span className="cal-day-name">{a.split(" ")[0].toUpperCase()}</span>
+                      <span style={{width:8,height:8,borderRadius:"50%",background:aColor(a),display:"inline-block",marginTop:2}}/>
+                    </div>
+                  ))}
+                </div>
+                <div className="cal-scroll" ref={calScrollRef}>
+                  <div style={{display:"flex"}}>
+                    <div style={{width:44,flexShrink:0}}>
+                      {CAL_HOURS.map(h=><div key={h} className="cal-time-cell"><span className="cal-time-lbl">{h}:00</span></div>)}
+                    </div>
+                    {activeCols.map((aName,ci)=>{
+                      const assigneeJobs=calJobs.filter(j=>j.assignee===aName&&j.due===ds(calDate));
+                      return(
+                        <div key={ci} style={{flex:1,position:"relative",borderLeft:"1px solid var(--card-border)"}}>
+                          {CAL_HOURS.map(h=><div key={h} className="cal-slot" onClick={()=>openCalAdd(calDate,h,aName)}><div className="cal-slot-half"/></div>)}
+                          {assigneeJobs.map(job=><EventEl key={job.id} job={job} hideAssigneeName={true}/>)}
+                          {isToday(calDate)&&showNow&&<div className="cal-now-line" style={{top:nowPx}}><div className="cal-now-dot"/></div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            ):(
+              <div className="cal-grid-outer">
+                <div style={{display:"grid",gridTemplateColumns:`44px repeat(${cols},1fr)`,borderBottom:"1px solid var(--card-border)"}}>
+                  <div/>
+                  {days.map((d,i)=>(
+                    <div key={i} className={`cal-day-hdr${isToday(d)?" today":""}`}>
+                      <span className="cal-day-name">{calView==="week"?DAY_ABB[i]:d.toLocaleDateString("en-GB",{weekday:"short"}).toUpperCase()}</span>
+                      <span className={`cal-day-num${isToday(d)?" today-num":""}`}>{d.getDate()}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="cal-scroll" ref={calScrollRef}>
+                  <div style={{display:"flex"}}>
+                    <div style={{width:44,flexShrink:0}}>
+                      {CAL_HOURS.map(h=><div key={h} className="cal-time-cell"><span className="cal-time-lbl">{h}:00</span></div>)}
+                    </div>
+                    {days.map((d,di)=>{
+                      const dStr=ds(d); const dayJobs=calJobs.filter(j=>j.due===dStr);
+                      return(
+                        <div key={di} style={{flex:1,position:"relative",borderLeft:"1px solid var(--card-border)"}}>
+                          {CAL_HOURS.map(h=><div key={h} className="cal-slot" onClick={()=>openCalAdd(d,h)}><div className="cal-slot-half"/></div>)}
+                          {dayJobs.map(job=><EventEl key={job.id} job={job}/>)}
+                          {isToday(d)&&showNow&&<div className="cal-now-line" style={{top:nowPx}}><div className="cal-now-dot"/></div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         );
       };
@@ -1217,7 +1381,7 @@
                     <FG label="Port"><input className="ws-input" placeholder="587" value={eCfg.port||""} onChange={e=>setECfg(c=>({...c,port:e.target.value,provider:"Custom"}))}/></FG>
                   </div>
                   <div style={{display:"flex",alignItems:"center",gap:10}}>
-                    <div className="ws-toggle-track" onClick={()=>setECfg(c=>({...c,secure:!c.secure,provider:"Custom"}))} role="switch" aria-checked={eCfg.secure} tabIndex={0} onKeyDown={e=>e.key===" "&&setECfg(c=>({...c,secure:!c.secure,provider:"Custom"}))}>
+                    <div className="ws-toggle-track" onClick={()=>setECfg(c=>({...c,secure:!c.secure,port:!c.secure?"465":"587",provider:"Custom"}))} role="switch" aria-checked={eCfg.secure} tabIndex={0} onKeyDown={e=>e.key===" "&&setECfg(c=>({...c,secure:!c.secure,port:!c.secure?"465":"587",provider:"Custom"}))}>
                       <div className={`ws-toggle-knob${eCfg.secure?" on":""}`}/>
                     </div>
                     <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,color:"var(--text-sec)",fontWeight:300}}>{eCfg.secure?"SSL / TLS (port 465)":"STARTTLS (port 587)"}</span>
@@ -1329,6 +1493,19 @@
                   <div key={k}><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",marginBottom:6,fontWeight:500,textTransform:"uppercase"}}>{k}</div><div style={{fontFamily:"'Noto Serif JP',serif",fontSize:14,color:"var(--text-pri)",fontWeight:400}}>{v}</div></div>
                 ))}
               </div>
+              {job.contact?.name&&(
+                <>
+                  <BrushStroke variant={1} style={{margin:"20px 0 16px"}}/>
+                  <div>
+                    <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",marginBottom:8,fontWeight:500,textTransform:"uppercase"}}>Contact Person</div>
+                    <div style={{fontFamily:"'Noto Serif JP',serif",fontSize:14,color:"var(--text-pri)",fontWeight:400,marginBottom:8}}>{job.contact.name}</div>
+                    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                      {job.contact.phone&&<a href={`tel:${job.contact.phone}`} style={{display:"inline-flex",alignItems:"center",gap:6,fontFamily:"'Noto Sans JP',sans-serif",fontSize:12,color:"var(--indigo)",textDecoration:"none",letterSpacing:"0.04em"}}>📞 {job.contact.phone}</a>}
+                      {job.contact.email&&<a href={`mailto:${job.contact.email}`} style={{display:"inline-flex",alignItems:"center",gap:6,fontFamily:"'Noto Sans JP',sans-serif",fontSize:12,color:"var(--indigo)",textDecoration:"none",letterSpacing:"0.04em"}}>✉ {job.contact.email}</a>}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
             {job.completionReport&&job.completionReport.templateType==="site-visit"&&(()=>{
@@ -1390,6 +1567,7 @@
               <FG label="Scheduled Time"><input type="time" className="ws-input" value={form.scheduledTime||""} onChange={e=>sf("scheduledTime",e.target.value)}/></FG>
               <FG label="Assignee" error={errs.assignee}><EditableSelect value={form.assignee||""} onChange={v=>sf("assignee",v)} items={assignees} onItemsChange={setAssignees} placeholder="Select or add assignee…"/></FG>
               <FG label="Location" error={errs.location}><EditableSelect value={form.location||""} onChange={v=>sf("location",v)} items={locations} onItemsChange={setLocations} placeholder="Select or add location…"/></FG>
+              <FG label="Contact Person" full><ContactSelect value={form.contact||{}} onChange={v=>sf("contact",v)} contacts={contacts} onContactsChange={setContacts} placeholder="Select or add contact…"/></FG>
               <FG label="Report Recipient Email" full><input type="email" className="ws-input" placeholder="Send completion report to…" value={form.recipientEmail||""} onChange={e=>sf("recipientEmail",e.target.value)}/></FG>
               <FG label="Notes" full><textarea className="ws-input" style={{minHeight:90,resize:"vertical"}} placeholder="Context, hazards, special instructions…" value={form.description||""} onChange={e=>sf("description",e.target.value)}/></FG>
             </div>
