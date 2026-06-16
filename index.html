@@ -123,6 +123,14 @@
         .install-banner{position:fixed;bottom:0;left:0;right:0;z-index:2000;background:var(--card-bg);border-top:1px solid var(--card-border);padding:16px 20px;display:flex;align-items:center;gap:14px;box-shadow:0 -4px 24px rgba(0,0,0,0.12);padding-bottom:calc(16px + env(safe-area-inset-bottom,0px));animation:fadeUp 0.4s ease both;}
         .install-icon{width:44px;height:44px;border-radius:10px;background:var(--washi);border:1px solid var(--card-border);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;font-family:serif;}
         .offline-badge{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:1500;background:var(--aka);color:#fff;padding:6px 16px;border-radius:20px;font-family:'Noto Sans JP',sans-serif;font-size:11px;letter-spacing:0.08em;box-shadow:0 4px 16px rgba(0,0,0,0.2);}
+        .cs-item-actions{display:flex;align-items:center;gap:2px;margin-left:auto;padding-left:8px;flex-shrink:0;opacity:0;transition:opacity 0.15s;}
+        .cs-item:hover .cs-item-actions{opacity:1;}
+        .cs-item-action{background:none;border:none;cursor:pointer;color:var(--text-dim);font-size:13px;padding:3px 5px;border-radius:1px;line-height:1;transition:color 0.15s;}
+        .cs-item-action:hover{color:var(--text-pri);}
+        .cs-item-action.del:hover{color:var(--aka);}
+        .cs-edit-row{padding:8px 12px;display:flex;gap:6px;align-items:center;border-top:1px solid var(--card-border);}
+        .cs-add-row{padding:10px 16px;display:flex;align-items:center;gap:6px;border-top:1px solid var(--card-border);color:var(--text-dim);cursor:pointer;font-family:'Noto Sans JP',sans-serif;font-size:12px;letter-spacing:0.06em;transition:color 0.15s;}
+        .cs-add-row:hover{color:var(--text-pri);}
         @media(max-width:600px){
           .ws-btn-primary,.ws-btn-ghost,.ws-btn-danger{padding:14px 20px;min-height:48px;}
           .ws-input{font-size:16px!important;}
@@ -136,6 +144,7 @@
           .cal-toolbar{flex-direction:column;align-items:flex-start!important;}
           .cal-period{font-size:12px!important;width:100%;}
           .cal-scroll{max-height:calc(100vh - 380px)!important;}
+          .cs-item-actions{opacity:1;}
         }
         .tab-bar{display:flex;border-bottom:2px solid var(--card-border);margin-bottom:32px;}
         .tab-btn{padding:10px 20px;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;cursor:pointer;font-family:'Noto Sans JP',sans-serif;font-size:10px;letter-spacing:0.14em;color:var(--text-sec);text-transform:uppercase;transition:all 0.2s;}
@@ -317,6 +326,73 @@
                   {o.label}
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    const EditableSelect = ({value, onChange, items, onItemsChange, placeholder="Select…"}) => {
+      const [open,setOpen]       = useState(false);
+      const [adding,setAdding]   = useState(false);
+      const [newItem,setNewItem] = useState("");
+      const [editIdx,setEditIdx] = useState(-1);
+      const [editVal,setEditVal] = useState("");
+      const ref = useRef(null);
+      useEffect(()=>{
+        if(!open)return;
+        const h=e=>{if(ref.current&&!ref.current.contains(e.target)){setOpen(false);setAdding(false);setEditIdx(-1);}};
+        document.addEventListener("mousedown",h);document.addEventListener("touchstart",h);
+        return()=>{document.removeEventListener("mousedown",h);document.removeEventListener("touchstart",h);};
+      },[open]);
+      const select=(item)=>{onChange(item);setOpen(false);setAdding(false);setEditIdx(-1);};
+      const addItem=()=>{const v=newItem.trim();if(!v)return;const next=[...items,v];onItemsChange(next);onChange(v);setNewItem("");setAdding(false);setOpen(false);};
+      const deleteItem=(e,idx)=>{e.stopPropagation();const next=items.filter((_,i)=>i!==idx);onItemsChange(next);if(items[idx]===value)onChange(next[0]||"");};
+      const startEdit=(e,idx)=>{e.stopPropagation();setEditIdx(idx);setEditVal(items[idx]);};
+      const saveEdit=(e)=>{e.stopPropagation();const v=editVal.trim();if(!v)return;const next=items.map((it,i)=>i===editIdx?v:it);onItemsChange(next);if(items[editIdx]===value)onChange(v);setEditIdx(-1);};
+      return (
+        <div ref={ref} className="cs-wrap">
+          <button className="cs-btn" onClick={()=>{setOpen(o=>!o);setAdding(false);setEditIdx(-1);}}>
+            <span style={{color:value?"inherit":"var(--text-dim)"}}>{value||placeholder}</span>
+            <svg width="10" height="6" viewBox="0 0 10 6" style={{transform:open?"rotate(180deg)":"none",transition:"transform 0.2s",flexShrink:0}}><polyline points="1,1 5,5 9,1" fill="none" stroke="var(--text-dim)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </button>
+          {open&&(
+            <div className="cs-list">
+              {items.map((item,idx)=>(
+                editIdx===idx?(
+                  <div key={idx} className="cs-edit-row" onClick={e=>e.stopPropagation()}>
+                    <input className="ws-input" style={{flex:1,padding:"6px 10px",fontSize:12}} value={editVal}
+                      onChange={e=>setEditVal(e.target.value)}
+                      onKeyDown={e=>{if(e.key==="Enter")saveEdit(e);if(e.key==="Escape"){e.stopPropagation();setEditIdx(-1);}}}
+                      autoFocus/>
+                    <button className="cs-item-action" onClick={saveEdit} style={{color:"var(--matcha)",opacity:1,fontSize:15}}>✓</button>
+                    <button className="cs-item-action" onClick={e=>{e.stopPropagation();setEditIdx(-1);}} style={{opacity:1}}>✕</button>
+                  </div>
+                ):(
+                  <div key={idx} className={`cs-item${value===item?" sel":""}`} style={{justifyContent:"space-between"}} onClick={()=>select(item)}>
+                    <span style={{display:"flex",alignItems:"center",gap:6,minWidth:0}}>
+                      {value===item&&<span style={{color:"var(--nori)",fontSize:11,flexShrink:0}}>✓</span>}
+                      <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item}</span>
+                    </span>
+                    <span className="cs-item-actions">
+                      <button className="cs-item-action" title="Rename" onClick={e=>startEdit(e,idx)}>✎</button>
+                      <button className="cs-item-action del" title="Delete" onClick={e=>deleteItem(e,idx)}>✕</button>
+                    </span>
+                  </div>
+                )
+              ))}
+              {adding?(
+                <div className="cs-edit-row" onClick={e=>e.stopPropagation()}>
+                  <input className="ws-input" style={{flex:1,padding:"6px 10px",fontSize:12}} placeholder="New item…"
+                    value={newItem} onChange={e=>setNewItem(e.target.value)}
+                    onKeyDown={e=>{if(e.key==="Enter")addItem();if(e.key==="Escape"){e.stopPropagation();setAdding(false);}}}
+                    autoFocus/>
+                  <button className="cs-item-action" onClick={addItem} style={{color:"var(--matcha)",opacity:1,fontSize:15}}>✓</button>
+                  <button className="cs-item-action" onClick={e=>{e.stopPropagation();setAdding(false);}} style={{opacity:1}}>✕</button>
+                </div>
+              ):(
+                <div className="cs-add-row" onClick={e=>{e.stopPropagation();setAdding(true);}}>＋ Add new</div>
+              )}
             </div>
           )}
         </div>
@@ -794,6 +870,14 @@
       const setSession = s=>{setSessionRaw(s);save(SESSION_KEY,s);};
       const setUsersStore = u=>{setUsersRaw(u);save("jc-users",u);};
       const uid = useRef(load("jc-uid",5));
+      const SEED_ASSIGNEES=["Marcus Chen","Sandra Okafor","Tom Reeves","Unassigned"];
+      const SEED_LOCATIONS=["Building B, Floor 3","Building A, Floor 2","All Zones","Parking Level P2"];
+      const [cats,setCatsRaw]           = useState(()=>load("jc-categories",CATS));
+      const setCats                      = v=>{setCatsRaw(v);save("jc-categories",v);};
+      const [assignees,setAssigneesRaw] = useState(()=>load("jc-assignees",SEED_ASSIGNEES));
+      const setAssignees                 = v=>{setAssigneesRaw(v);save("jc-assignees",v);};
+      const [locations,setLocationsRaw] = useState(()=>load("jc-locations",SEED_LOCATIONS));
+      const setLocations                 = v=>{setLocationsRaw(v);save("jc-locations",v);};
       const EMAIL_CFG_DEF={endpointUrl:"",senderName:"",provider:"Gmail",host:"smtp.gmail.com",port:"587",secure:false,smtpUser:"",smtpPass:""};
       const [emailCfg,setEmailCfgRaw] = useState(()=>load("jc-email-config",EMAIL_CFG_DEF));
       const setEmailCfg = c=>{setEmailCfgRaw(c);save("jc-email-config",c);};
@@ -849,9 +933,9 @@
 
       const [formOrigin,setFormOrigin] = useState("home");
       const sf=(k,v)=>setForm(f=>({...f,[k]:v}));
-      const openAdd=()=>{setForm({title:"",category:"Maintenance",priority:"Medium",status:"Outstanding",assignee:"",location:"",due:"",scheduledTime:"",description:"",recipientEmail:"",invoiceNo:""});setErrs({});setEdit(false);setFormOrigin("home");setView("form");};
+      const openAdd=()=>{setForm({invoiceNo:"",title:"",category:cats[0]||"Maintenance",priority:"Medium",status:"Outstanding",assignee:assignees[0]||"",location:locations[0]||"",due:"",scheduledTime:"",description:"",recipientEmail:""});setErrs({});setEdit(false);setFormOrigin("home");setView("form");};
       const openEdit=j=>{setForm({...j});setErrs({});setEdit(true);setFormOrigin("home");setView("form");};
-      const openCalAdd=(day,hour)=>{const due=ds(day);const scheduledTime=`${String(hour).padStart(2,"0")}:00`;setForm({title:"",category:"Maintenance",priority:"Medium",status:"Outstanding",assignee:"",location:"",due,scheduledTime,description:"",recipientEmail:"",invoiceNo:""});setErrs({});setEdit(false);setFormOrigin("calendar");setView("form");};
+      const openCalAdd=(day,hour)=>{const due=ds(day);const scheduledTime=`${String(hour).padStart(2,"0")}:00`;setForm({invoiceNo:"",title:"",category:cats[0]||"Maintenance",priority:"Medium",status:"Outstanding",assignee:assignees[0]||"",location:locations[0]||"",due,scheduledTime,description:"",recipientEmail:""});setErrs({});setEdit(false);setFormOrigin("calendar");setView("form");};
 
       const validate=()=>{
         const e={};
@@ -1299,13 +1383,13 @@
             <div className="form-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:24,marginBottom:24}}>
               <FG label="Quote / Invoice No." full><input className="ws-input" placeholder="e.g. INV-0042 or QT-2026-001…" value={form.invoiceNo||""} onChange={e=>sf("invoiceNo",e.target.value)}/></FG>
               <FG label="Job Title" error={errs.title} full><input className="ws-input" placeholder="Describe the task…" value={form.title||""} onChange={e=>sf("title",e.target.value)} style={{borderColor:errs.title?"var(--aka)":undefined}}/></FG>
-              <FG label="Category"><CustomSelect value={form.category||"Maintenance"} onChange={v=>sf("category",v)} options={CATS}/></FG>
+              <FG label="Category"><EditableSelect value={form.category||cats[0]||""} onChange={v=>sf("category",v)} items={cats} onItemsChange={setCats}/></FG>
               <FG label="Priority"><CustomSelect value={form.priority||"Medium"} onChange={v=>sf("priority",v)} options={PRIS}/></FG>
-              <FG label="Status"><CustomSelect value={form.status||"Outstanding"} onChange={v=>sf("status",v)} options={STATS}/></FG>
+              {edit&&<FG label="Status"><CustomSelect value={form.status||"Outstanding"} onChange={v=>sf("status",v)} options={STATS}/></FG>}
               <FG label="Due Date" error={errs.due}><input type="date" className="ws-input" value={form.due||""} onChange={e=>sf("due",e.target.value)} style={{borderColor:errs.due?"var(--aka)":undefined}}/></FG>
               <FG label="Scheduled Time"><input type="time" className="ws-input" value={form.scheduledTime||""} onChange={e=>sf("scheduledTime",e.target.value)}/></FG>
-              <FG label="Assignee" error={errs.assignee}><input className="ws-input" placeholder="Name or team…" value={form.assignee||""} onChange={e=>sf("assignee",e.target.value)} style={{borderColor:errs.assignee?"var(--aka)":undefined}}/></FG>
-              <FG label="Location" error={errs.location}><input className="ws-input" placeholder="Building, floor, zone…" value={form.location||""} onChange={e=>sf("location",e.target.value)} style={{borderColor:errs.location?"var(--aka)":undefined}}/></FG>
+              <FG label="Assignee" error={errs.assignee}><EditableSelect value={form.assignee||""} onChange={v=>sf("assignee",v)} items={assignees} onItemsChange={setAssignees} placeholder="Select or add assignee…"/></FG>
+              <FG label="Location" error={errs.location}><EditableSelect value={form.location||""} onChange={v=>sf("location",v)} items={locations} onItemsChange={setLocations} placeholder="Select or add location…"/></FG>
               <FG label="Report Recipient Email" full><input type="email" className="ws-input" placeholder="Send completion report to…" value={form.recipientEmail||""} onChange={e=>sf("recipientEmail",e.target.value)}/></FG>
               <FG label="Notes" full><textarea className="ws-input" style={{minHeight:90,resize:"vertical"}} placeholder="Context, hazards, special instructions…" value={form.description||""} onChange={e=>sf("description",e.target.value)}/></FG>
             </div>
