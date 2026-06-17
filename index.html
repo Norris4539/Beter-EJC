@@ -1109,8 +1109,11 @@
       const [editingTemplate,setEditingTemplate] = useState(null);
       const [tplEditForm,setTplEditForm] = useState({});
       const [newAssignee,setNewAssignee] = useState("");
-      const [editAss,setEditAss]       = useState(null);
-      const [editAssVal,setEditAssVal] = useState("");
+      const [newAssEmail,setNewAssEmail] = useState("");
+      const [newAssPw,setNewAssPw]       = useState("");
+      const [newAssErr,setNewAssErr]     = useState({});
+      const [editAss,setEditAss]         = useState(null);
+      const [editAssVal,setEditAssVal]   = useState("");
       const [editUserId,setEditUserId]   = useState(null);
       const [editUserName,setEditUserName] = useState("");
 
@@ -1437,35 +1440,23 @@
         <Page {...pg}>
           <TabNav/>
           <div style={{maxWidth:520}}>
-            <div style={{marginBottom:28}}>
-              <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.24em",color:"var(--text-dim)",marginBottom:10,fontWeight:300}}>ACCOUNT</div>
-              <h2 style={{fontFamily:"'Noto Serif JP',serif",fontWeight:300,fontSize:28,color:"var(--text-pri)",letterSpacing:"0.04em"}}>Settings</h2>
-              <BrushStroke variant={1} style={{marginTop:12}}/>
+            <BrushStroke variant={1} style={{marginBottom:24}}/>
+
+            {/* Sub-tab bar */}
+            <div className="sub-tab-bar" style={{marginBottom:24}}>
+              <button className={`sub-tab-btn${acctTab==="account"?" active":""}`} onClick={()=>setAcctTab("account")}>Account</button>
+              {session.isAdmin&&<button className={`sub-tab-btn${acctTab==="admin"?" active":""}`} onClick={()=>setAcctTab("admin")}>Admin</button>}
+              <button className={`sub-tab-btn${acctTab==="settings"?" active":""}`} onClick={()=>setAcctTab("settings")}>Settings</button>
             </div>
 
-            {/* Sub-tab bar — Admin only sees both tabs */}
-            {session.isAdmin&&(
-              <div className="sub-tab-bar" style={{marginBottom:24}}>
-                <button className={`sub-tab-btn${acctTab==="account"?" active":""}`} onClick={()=>setAcctTab("account")}>Account</button>
-                <button className={`sub-tab-btn${acctTab==="admin"?" active":""}`} onClick={()=>setAcctTab("admin")}>Admin</button>
-              </div>
-            )}
-
             {/* ── ACCOUNT sub-tab ─────────────────────────── */}
-            {(acctTab==="account"||!session.isAdmin)&&(<>
+            {acctTab==="account"&&(<>
               <div className="ws-card" style={{padding:"24px 28px",borderRadius:2,marginBottom:16}}>
                 <SL s={0}>Profile</SL>
                 <div style={{display:"flex",flexDirection:"column",gap:14}}>
                   <div><FL c="Name"/><div style={{fontFamily:"'Noto Serif JP',serif",fontSize:15,color:"var(--text-pri)",fontWeight:400}}>{session.name}</div></div>
                   <div><FL c="Email"/><div style={{fontFamily:"'Noto Serif JP',serif",fontSize:14,color:"var(--text-sec)",fontWeight:300}}>{session.email}</div></div>
                   {session.isAdmin&&(<div style={{display:"inline-flex",alignItems:"center",gap:6,padding:"3px 10px",borderRadius:1,background:"rgba(55,74,106,0.08)",border:"1px solid rgba(55,74,106,0.25)",alignSelf:"flex-start"}}><span style={{width:5,height:5,borderRadius:"50%",background:"var(--indigo)",display:"inline-block"}}/><span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,color:"var(--indigo)",letterSpacing:"0.12em",fontWeight:500}}>ADMINISTRATOR</span></div>)}
-                </div>
-              </div>
-              <div className="ws-card" style={{padding:"24px 28px",borderRadius:2,marginBottom:16}}>
-                <SL s={1}>Appearance</SL>
-                <div style={{display:"flex",alignItems:"center",gap:12}}>
-                  <ModeToggle/>
-                  <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:12,color:"var(--text-sec)",fontWeight:300}}>{dark?"Dark mode":"Light mode"}</span>
                 </div>
               </div>
               <BrushStroke variant={0} style={{margin:"8px 0 24px"}}/>
@@ -1507,114 +1498,111 @@
                 </div>
               </div>
 
-              {/* Assignee Management */}
+              {/* Assignee Management — adding an assignee also creates a user account */}
               <div className="ws-card" style={{padding:"24px 28px",borderRadius:2,marginBottom:16}}>
                 <SL s={0}>Assignee Management</SL>
-                <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,color:"var(--text-sec)",fontWeight:300,marginBottom:16}}>Manage the assignee list used on all work orders.</div>
+                <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,color:"var(--text-sec)",fontWeight:300,marginBottom:16}}>Adding an assignee creates a user account they can sign in with.</div>
                 <div style={{display:"flex",flexDirection:"column"}}>
-                  {assignees.map((a,i)=>(
-                    <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:i<assignees.length-1?"1px solid var(--card-border)":"none"}}>
-                      {editAss===i?(
-                        <div style={{display:"flex",gap:8,alignItems:"center",flex:1}}>
-                          <input className="ws-input" style={{flex:1,padding:"6px 10px",fontSize:13}} value={editAssVal} onChange={e=>setEditAssVal(e.target.value)} autoFocus onKeyDown={e=>{if(e.key==="Enter"){const nxt=assignees.map((x,xi)=>xi===i?editAssVal.trim()||x:x);setAssignees(nxt);setEditAss(null);}if(e.key==="Escape")setEditAss(null);}}/>
-                          <button className="cs-item-action" onClick={()=>{const nxt=assignees.map((x,xi)=>xi===i?editAssVal.trim()||x:x);setAssignees(nxt);setEditAss(null);}} style={{color:"var(--matcha)",opacity:1,fontSize:15}}>✓</button>
-                          <button className="cs-item-action" onClick={()=>setEditAss(null)} style={{opacity:1}}>✕</button>
-                        </div>
-                      ):(
-                        <>
-                          <span style={{fontFamily:"'Noto Serif JP',serif",fontSize:14,color:"var(--text-pri)",fontWeight:400}}>{a}</span>
+                  {assignees.map((a,i)=>{
+                    const linkedUser=users.find(u=>u.name===a);
+                    return(
+                      <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:i<assignees.length-1?"1px solid var(--card-border)":"none"}}>
+                        {editAss===i?(
+                          <div style={{display:"flex",gap:8,alignItems:"center",flex:1}}>
+                            <input className="ws-input" style={{flex:1,padding:"6px 10px",fontSize:13}} value={editAssVal} onChange={e=>setEditAssVal(e.target.value)} autoFocus onKeyDown={e=>{if(e.key==="Enter"){const nxt=assignees.map((x,xi)=>xi===i?editAssVal.trim()||x:x);setAssignees(nxt);setEditAss(null);}if(e.key==="Escape")setEditAss(null);}}/>
+                            <button className="cs-item-action" onClick={()=>{const nxt=assignees.map((x,xi)=>xi===i?editAssVal.trim()||x:x);setAssignees(nxt);setEditAss(null);}} style={{color:"var(--matcha)",opacity:1,fontSize:15}}>✓</button>
+                            <button className="cs-item-action" onClick={()=>setEditAss(null)} style={{opacity:1}}>✕</button>
+                          </div>
+                        ):(
+                          <div style={{display:"flex",flexDirection:"column",gap:2}}>
+                            <span style={{fontFamily:"'Noto Serif JP',serif",fontSize:14,color:"var(--text-pri)",fontWeight:400}}>{a}</span>
+                            {linkedUser&&<span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,color:"var(--text-dim)",letterSpacing:"0.06em"}}>{linkedUser.email}</span>}
+                          </div>
+                        )}
+                        {editAss!==i&&(
                           <div style={{display:"flex",gap:6}}>
                             <button className="cs-item-action" style={{opacity:1,color:"var(--text-sec)",fontSize:13}} onClick={()=>{setEditAss(i);setEditAssVal(a);}}>✎</button>
                             <button className="cs-item-action del" style={{opacity:1,fontSize:13}} onClick={()=>{const nxt=assignees.filter((_,xi)=>xi!==i);setAssignees(nxt);}}>✕</button>
                           </div>
-                        </>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                <div style={{display:"flex",gap:8,marginTop:14}}>
-                  <input className="ws-input" style={{flex:1,padding:"8px 12px"}} placeholder="New assignee name…" value={newAssignee} onChange={e=>setNewAssignee(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&newAssignee.trim()){setAssignees([...assignees,newAssignee.trim()]);setNewAssignee("");}}}/>
-                  <button className="ws-btn-primary" style={{padding:"8px 16px",fontSize:11}} onClick={()=>{if(newAssignee.trim()){setAssignees([...assignees,newAssignee.trim()]);setNewAssignee("");}}}>+ Add</button>
-                </div>
-              </div>
-
-              {/* Report Templates */}
-              <div className="ws-card" style={{padding:"24px 28px",borderRadius:2,marginBottom:16}}>
-                <SL s={0}>Report Templates</SL>
-                {templates.length===0?(
-                  <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:12,color:"var(--text-dim)",fontWeight:300,paddingBottom:4}}>No saved templates. Complete a job report and use "Save as template" to create one.</div>
-                ):(
-                  <div style={{display:"flex",flexDirection:"column",gap:0}}>
-                    {templates.map((t,i)=>(
-                      <div key={t.id} style={{borderBottom:i<templates.length-1?"1px solid var(--card-border)":"none",paddingBottom:editingTemplate===t.id?16:0}}>
-                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0"}}>
-                          <div>
-                            <div style={{fontFamily:"'Noto Serif JP',serif",fontSize:14,color:"var(--text-pri)",fontWeight:400,marginBottom:2}}>{t.name}</div>
-                            <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,color:"var(--text-dim)",fontWeight:300}}>Site Visit · Custom</div>
-                          </div>
-                          <div style={{display:"flex",gap:6}}>
-                            <button className="ws-btn-ghost" style={{padding:"5px 10px",fontSize:10}} onClick={()=>{if(editingTemplate===t.id){setEditingTemplate(null);}else{setEditingTemplate(t.id);setTplEditForm({...t});}}}>
-                              {editingTemplate===t.id?"Cancel":"✎ Edit"}
-                            </button>
-                            <button className="ws-btn-danger" style={{padding:"5px 10px",fontSize:10}} onClick={()=>{setTemplates(templates.filter(x=>x.id!==t.id));notify(`"${t.name}" deleted`,"err");}}>Delete</button>
-                          </div>
-                        </div>
-                        {editingTemplate===t.id&&(
-                          <div style={{display:"flex",flexDirection:"column",gap:14,padding:"14px 16px",background:"var(--input-bg)",border:"1px solid var(--card-border)",borderRadius:2,marginBottom:8}}>
-                            <div>
-                              <FL c="Template Name"/>
-                              <input className="ws-input" value={tplEditForm.name||""} onChange={e=>setTplEditForm(f=>({...f,name:e.target.value}))} style={{padding:"8px 12px"}}/>
-                            </div>
-                            <div>
-                              <FL c="Met with (default)"/>
-                              <input className="ws-input" placeholder="Name or role…" value={tplEditForm.metWith||""} onChange={e=>setTplEditForm(f=>({...f,metWith:e.target.value}))} style={{padding:"8px 12px"}}/>
-                            </div>
-                            <div>
-                              <FL c="Work Completed (defaults)"/>
-                              <BulletEd items={tplEditForm.workCompleted?.length?tplEditForm.workCompleted:[""]} onChange={v=>setTplEditForm(f=>({...f,workCompleted:v}))} ph="Work completed item…"/>
-                            </div>
-                            <div>
-                              <FL c="Work Remaining (defaults)"/>
-                              <BulletEd items={tplEditForm.workRemaining?.length?tplEditForm.workRemaining:[""]} onChange={v=>setTplEditForm(f=>({...f,workRemaining:v}))} ph="Work remaining item…"/>
-                            </div>
-                            <div>
-                              <FL c="Additional Notes (default)"/>
-                              <textarea className="ws-input" style={{minHeight:64,resize:"vertical",fontSize:13}} value={tplEditForm.additionalNotes||""} onChange={e=>setTplEditForm(f=>({...f,additionalNotes:e.target.value}))}/>
-                            </div>
-                            <button className="ws-btn-primary" style={{alignSelf:"flex-start",fontSize:11,padding:"8px 18px"}} onClick={()=>{setTemplates(templates.map(x=>x.id===t.id?{...tplEditForm,id:t.id}:x));setEditingTemplate(null);notify("Template updated");}}>Save Changes</button>
-                          </div>
                         )}
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                    );
+                  })}
+                </div>
 
-              {/* Email / SMTP */}
-              <div className="ws-card" style={{padding:"24px 28px",borderRadius:2,marginBottom:16}}>
-                <SL s={1}>Email / SMTP</SL>
-                <div style={{display:"flex",flexDirection:"column",gap:14}}>
-                  <FG label="Proxy Endpoint URL"><input className="ws-input" placeholder="https://….netlify.app/.netlify/functions/send-email" value={eCfg.endpointUrl||""} onChange={e=>setECfg(c=>({...c,endpointUrl:e.target.value}))}/></FG>
-                  <FG label="Sender Display Name"><input className="ws-input" placeholder="JobFlow Notifications" value={eCfg.senderName||""} onChange={e=>setECfg(c=>({...c,senderName:e.target.value}))}/></FG>
-                  <FG label="SMTP Provider">
-                    <CustomSelect value={eCfg.provider||"Gmail"} onChange={v=>{const p=SMTP_PROVIDERS.find(x=>x.label===v);setECfg(c=>({...c,provider:v,...(p&&p.label!=="Custom"?{host:p.host,port:p.port,secure:p.secure}:{})}));}}
-                      options={SMTP_PROVIDERS.map(p=>({value:p.label,label:p.label}))}/>
-                  </FG>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 88px",gap:12}}>
-                    <FG label="SMTP Host"><input className="ws-input" placeholder="smtp.gmail.com" value={eCfg.host||""} onChange={e=>setECfg(c=>({...c,host:e.target.value,provider:"Custom"}))}/></FG>
-                    <FG label="Port"><input className="ws-input" placeholder="587" value={eCfg.port||""} onChange={e=>setECfg(c=>({...c,port:e.target.value,provider:"Custom"}))}/></FG>
+                {/* Add new assignee — 3 required fields */}
+                <BrushStroke variant={0} style={{margin:"16px 0 14px"}}/>
+                <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.14em",color:"var(--text-sec)",textTransform:"uppercase",marginBottom:12}}>Add New Assignee</div>
+                <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                  <div>
+                    <FL c="Display Name *"/>
+                    <input className="ws-input" placeholder="Full name…" value={newAssignee} onChange={e=>{setNewAssignee(e.target.value);setNewAssErr(x=>({...x,name:null}));}} style={{borderColor:newAssErr.name?"var(--aka)":undefined}}/>
+                    {newAssErr.name&&<div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,color:"var(--aka)",marginTop:4}}>* {newAssErr.name}</div>}
                   </div>
-                  <div style={{display:"flex",alignItems:"center",gap:10}}>
-                    <div className="ws-toggle-track" onClick={()=>setECfg(c=>({...c,secure:!c.secure,port:!c.secure?"465":"587",provider:"Custom"}))} role="switch" aria-checked={eCfg.secure} tabIndex={0} onKeyDown={e=>e.key===" "&&setECfg(c=>({...c,secure:!c.secure,port:!c.secure?"465":"587",provider:"Custom"}))}>
-                      <div className={`ws-toggle-knob${eCfg.secure?" on":""}`}/>
-                    </div>
-                    <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,color:"var(--text-sec)",fontWeight:300}}>{eCfg.secure?"SSL / TLS (port 465)":"STARTTLS (port 587)"}</span>
+                  <div>
+                    <FL c="Work Email (login username) *"/>
+                    <input type="email" className="ws-input" placeholder="name@company.com" value={newAssEmail} onChange={e=>{setNewAssEmail(e.target.value);setNewAssErr(x=>({...x,email:null}));}} style={{borderColor:newAssErr.email?"var(--aka)":undefined}}/>
+                    {newAssErr.email&&<div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,color:"var(--aka)",marginTop:4}}>* {newAssErr.email}</div>}
                   </div>
-                  <FG label="SMTP Username"><input className="ws-input" placeholder="your@email.com" value={eCfg.smtpUser||""} onChange={e=>setECfg(c=>({...c,smtpUser:e.target.value}))}/></FG>
-                  <FG label="SMTP Password / App Password"><input type="password" className="ws-input" placeholder="••••••••••••" value={eCfg.smtpPass||""} onChange={e=>setECfg(c=>({...c,smtpPass:e.target.value}))}/></FG>
-                  <button className="ws-btn-primary" style={{alignSelf:"flex-start",fontSize:11,padding:"9px 20px",letterSpacing:"0.12em"}} onClick={()=>{setEmailCfg(eCfg);notify("Email settings saved");}}>Save</button>
+                  <div>
+                    <FL c="Password *"/>
+                    <input type="password" className="ws-input" placeholder="••••••••" value={newAssPw} onChange={e=>{setNewAssPw(e.target.value);setNewAssErr(x=>({...x,pw:null}));}} style={{borderColor:newAssErr.pw?"var(--aka)":undefined}}/>
+                    {newAssErr.pw&&<div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,color:"var(--aka)",marginTop:4}}>* {newAssErr.pw}</div>}
+                  </div>
+                  <button className="ws-btn-primary" style={{alignSelf:"flex-start",padding:"9px 20px",fontSize:11,letterSpacing:"0.12em",marginTop:4}} onClick={async()=>{
+                    const errs={};
+                    if(!newAssignee.trim()) errs.name="Name required";
+                    if(!newAssEmail.trim()) errs.email="Email required";
+                    else if(users.some(u=>u.email.toLowerCase()===newAssEmail.trim().toLowerCase())) errs.email="Email already in use";
+                    if(!newAssPw.trim()||newAssPw.length<4) errs.pw="Password must be at least 4 characters";
+                    if(Object.keys(errs).length){setNewAssErr(errs);return;}
+                    const h=await hashPw(newAssPw,newAssEmail.trim());
+                    const nu={id:Date.now(),email:newAssEmail.trim(),name:newAssignee.trim(),pwHash:h,isAdmin:false};
+                    setUsersStore([...users,nu]);
+                    setAssignees([...assignees,newAssignee.trim()]);
+                    setNewAssignee("");setNewAssEmail("");setNewAssPw("");setNewAssErr({});
+                    notify(`${newAssignee.trim()} added`);
+                  }}>+ Add Assignee</button>
                 </div>
               </div>
+            </>)}
+
+            {/* ── SETTINGS sub-tab ─────────────────────────── */}
+            {acctTab==="settings"&&(<>
+              <div className="ws-card" style={{padding:"24px 28px",borderRadius:2,marginBottom:16}}>
+                <SL s={1}>Appearance</SL>
+                <div style={{display:"flex",alignItems:"center",gap:12}}>
+                  <ModeToggle/>
+                  <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:12,color:"var(--text-sec)",fontWeight:300}}>{dark?"Dark mode":"Light mode"}</span>
+                </div>
+              </div>
+
+              {session.isAdmin&&(
+                <div className="ws-card" style={{padding:"24px 28px",borderRadius:2,marginBottom:16}}>
+                  <SL s={1}>Email / SMTP</SL>
+                  <div style={{display:"flex",flexDirection:"column",gap:14}}>
+                    <FG label="Proxy Endpoint URL"><input className="ws-input" placeholder="https://….netlify.app/.netlify/functions/send-email" value={eCfg.endpointUrl||""} onChange={e=>setECfg(c=>({...c,endpointUrl:e.target.value}))}/></FG>
+                    <FG label="Sender Display Name"><input className="ws-input" placeholder="JobFlow Notifications" value={eCfg.senderName||""} onChange={e=>setECfg(c=>({...c,senderName:e.target.value}))}/></FG>
+                    <FG label="SMTP Provider">
+                      <CustomSelect value={eCfg.provider||"Gmail"} onChange={v=>{const p=SMTP_PROVIDERS.find(x=>x.label===v);setECfg(c=>({...c,provider:v,...(p&&p.label!=="Custom"?{host:p.host,port:p.port,secure:p.secure}:{})}));}}
+                        options={SMTP_PROVIDERS.map(p=>({value:p.label,label:p.label}))}/>
+                    </FG>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 88px",gap:12}}>
+                      <FG label="SMTP Host"><input className="ws-input" placeholder="smtp.gmail.com" value={eCfg.host||""} onChange={e=>setECfg(c=>({...c,host:e.target.value,provider:"Custom"}))}/></FG>
+                      <FG label="Port"><input className="ws-input" placeholder="587" value={eCfg.port||""} onChange={e=>setECfg(c=>({...c,port:e.target.value,provider:"Custom"}))}/></FG>
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:10}}>
+                      <div className="ws-toggle-track" onClick={()=>setECfg(c=>({...c,secure:!c.secure,port:!c.secure?"465":"587",provider:"Custom"}))} role="switch" aria-checked={eCfg.secure} tabIndex={0} onKeyDown={e=>e.key===" "&&setECfg(c=>({...c,secure:!c.secure,port:!c.secure?"465":"587",provider:"Custom"}))}>
+                        <div className={`ws-toggle-knob${eCfg.secure?" on":""}`}/>
+                      </div>
+                      <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,color:"var(--text-sec)",fontWeight:300}}>{eCfg.secure?"SSL / TLS (port 465)":"STARTTLS (port 587)"}</span>
+                    </div>
+                    <FG label="SMTP Username"><input className="ws-input" placeholder="your@email.com" value={eCfg.smtpUser||""} onChange={e=>setECfg(c=>({...c,smtpUser:e.target.value}))}/></FG>
+                    <FG label="SMTP Password / App Password"><input type="password" className="ws-input" placeholder="••••••••••••" value={eCfg.smtpPass||""} onChange={e=>setECfg(c=>({...c,smtpPass:e.target.value}))}/></FG>
+                    <button className="ws-btn-primary" style={{alignSelf:"flex-start",fontSize:11,padding:"9px 20px",letterSpacing:"0.12em"}} onClick={()=>{setEmailCfg(eCfg);notify("Email settings saved");}}>Save</button>
+                  </div>
+                </div>
+              )}
             </>)}
           </div>
         </Page>
