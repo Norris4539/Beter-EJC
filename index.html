@@ -1597,7 +1597,7 @@
                   <FG label="Proxy Endpoint URL"><input className="ws-input" placeholder="https://….netlify.app/.netlify/functions/send-email" value={eCfg.endpointUrl||""} onChange={e=>setECfg(c=>({...c,endpointUrl:e.target.value}))}/></FG>
                   <FG label="Sender Display Name"><input className="ws-input" placeholder="JobFlow Notifications" value={eCfg.senderName||""} onChange={e=>setECfg(c=>({...c,senderName:e.target.value}))}/></FG>
                   <FG label="SMTP Provider">
-                    <CustomSelect value={eCfg.provider||"Gmail"} onChange={v=>{const p=SMTP_PROVIDERS.find(x=>x.label===v);setECfg(c=>({...c,provider:v,...(p&&p.label!=="Custom"?{host:p.host,port:p.port,secure:p.secure}:{})}))};}
+                    <CustomSelect value={eCfg.provider||"Gmail"} onChange={v=>{const p=SMTP_PROVIDERS.find(x=>x.label===v);setECfg(c=>({...c,provider:v,...(p&&p.label!=="Custom"?{host:p.host,port:p.port,secure:p.secure}:{})}));}}
                       options={SMTP_PROVIDERS.map(p=>({value:p.label,label:p.label}))}/>
                   </FG>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 88px",gap:12}}>
