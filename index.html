@@ -1886,8 +1886,8 @@
               {edit&&<FG label="Status"><CustomSelect value={form.status||"Outstanding"} onChange={v=>sf("status",v)} options={STATS}/></FG>}
               <FG label="Assignee" error={errs.assignee}><CustomSelect value={form.assignee||assignees[0]||""} onChange={v=>sf("assignee",v)} options={assignees.map(a=>({value:a,label:a}))}/></FG>
               <FG label="Location" error={errs.location}><EditableSelect value={form.location||""} onChange={v=>sf("location",v)} items={locations} onItemsChange={setLocations} placeholder="Select or add location…"/></FG>
-              <FG label="Due Date" error={errs.due} full><DatePicker value={form.due||""} onChange={v=>sf("due",v)} hasError={!!errs.due}/></FG>
-              <FG label="Scheduled Time" full><ClockPicker value={form.scheduledTime||"09:00"} onChange={v=>sf("scheduledTime",v)}/></FG>
+              <FG label="Due Date" error={errs.due}><DatePicker value={form.due||""} onChange={v=>sf("due",v)} hasError={!!errs.due}/></FG>
+              <FG label="Scheduled Time"><ClockPicker value={form.scheduledTime||"09:00"} onChange={v=>sf("scheduledTime",v)}/></FG>
               <FG label="Contact Person" full><ContactSelect value={form.contact||{}} onChange={v=>sf("contact",v)} contacts={contacts} onContactsChange={setContacts} placeholder="Select or add contact…"/></FG>
               <FG label="Report Recipient Email" full><input type="email" className="ws-input" placeholder="Send completion report to…" value={form.recipientEmail||""} onChange={e=>sf("recipientEmail",e.target.value)}/></FG>
               <FG label="Notes" full><textarea className="ws-input" style={{minHeight:90,resize:"vertical"}} placeholder="Context, hazards, special instructions…" value={form.description||""} onChange={e=>sf("description",e.target.value)}/></FG>
