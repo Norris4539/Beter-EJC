@@ -49,6 +49,14 @@
             }));
           }
         });
+        self.addEventListener('push',e=>{
+          const d=e.data?e.data.json():{title:'JobFlow',body:''};
+          e.waitUntil(self.registration.showNotification(d.title||'JobFlow',{body:d.body||'',icon:d.icon||'',badge:d.icon||'',tag:'jc-assign',renotify:true}));
+        });
+        self.addEventListener('notificationclick',e=>{
+          e.notification.close();
+          e.waitUntil(clients.matchAll({type:'window'}).then(cs=>{for(const c of cs){if(c.url&&'focus' in c)return c.focus();}if(clients.openWindow)return clients.openWindow('/');}));
+        });
       `;
       const blob=new Blob([SW],{type:'application/javascript'});
       navigator.serviceWorker.register(URL.createObjectURL(blob)).catch(console.error);
@@ -188,6 +196,30 @@
         .cs-item:hover{background:rgba(122,110,94,0.07);}
         .cs-item.sel{font-weight:500;}
         .si-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:28px;}
+        .sub-tab-bar{display:flex;border-bottom:1px solid var(--card-border);margin-bottom:24px;gap:0;}
+        .sub-tab-btn{padding:8px 18px;background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;cursor:pointer;font-family:'Noto Sans JP',sans-serif;font-size:10px;letter-spacing:0.12em;color:var(--text-sec);text-transform:uppercase;transition:all 0.2s;}
+        .sub-tab-btn.active{color:var(--text-pri);border-bottom-color:var(--sumi);}
+        .sub-tab-btn:hover:not(.active){color:var(--text-pri);}
+        .rpt-bar-wrap{display:flex;flex-direction:column;gap:10;}
+        .rpt-bar-row{display:flex;align-items:center;gap:10;}
+        .rpt-bar-label{font-family:'Noto Sans JP',sans-serif;font-size:10px;color:var(--text-sec);letter-spacing:0.06em;width:110px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+        .rpt-bar-track{flex:1;height:10px;background:var(--card-border);border-radius:1px;overflow:hidden;opacity:0.35;}
+        .rpt-bar-fill{height:100%;border-radius:1px;transition:width 0.4s ease;}
+        .rpt-bar-count{font-family:'Noto Serif JP',serif;font-size:12px;color:var(--text-pri);width:24px;text-align:right;flex-shrink:0;}
+        .hist-row{display:flex;align-items:flex-start;gap:12;padding:14px 0;border-bottom:1px solid var(--card-border);cursor:pointer;transition:background 0.12s;}
+        .hist-row:hover{background:rgba(122,110,94,0.04);}
+        .hist-row:last-child{border-bottom:none;}
+        .photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:8px;margin-top:8px;}
+        .photo-thumb{width:100%;aspect-ratio:1;object-fit:cover;border-radius:2px;border:1px solid var(--card-border);cursor:pointer;transition:opacity 0.15s;}
+        .photo-thumb:hover{opacity:0.8;}
+        .photo-lightbox{position:fixed;inset:0;z-index:1200;background:rgba(0,0,0,0.92);display:flex;align-items:center;justify-content:center;padding:20px;}
+        .photo-lightbox img{max-width:100%;max-height:100%;object-fit:contain;border-radius:2px;}
+        .user-admin-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--card-border);}
+        .user-admin-row:last-child{border-bottom:none;}
+        @media(max-width:600px){
+          .rpt-bar-label{width:80px;}
+          .tab-btn{padding:10px 12px;font-size:9px;}
+        }
       `}</style>
     );
 
@@ -695,12 +727,12 @@
                   </div>
                   <button onClick={()=>setFullscreen(false)} style={{background:"none",border:"1px solid rgba(200,184,154,0.25)",cursor:"pointer",color:"#c8b89a",fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.08em",padding:"6px 14px",borderRadius:1,flexShrink:0}}>× Close</button>
                 </div>
-                <div style={{flex:1,minHeight:0}}>
+                <div style={{flex:1,minHeight:0,display:"flex",flexDirection:"column"}}>
                   <canvas
                     ref={fsCanvasRef}
                     width={1080}
                     height={1920}
-                    style={{width:"100%",height:"100%",background:"#f7f4ee",borderRadius:2,cursor:"crosshair",touchAction:"none",display:"block"}}
+                    style={{flex:1,minHeight:0,width:"100%",background:"#f7f4ee",borderRadius:2,cursor:"crosshair",touchAction:"none",display:"block"}}
                     onMouseDown={startDraw} onMouseMove={draw} onMouseUp={endDraw} onMouseLeave={endDraw}
                     onTouchStart={startDraw} onTouchMove={draw} onTouchEnd={endDraw}
                   />
@@ -719,7 +751,7 @@
       );
     };
 
-    const CModal = ({cModal,cTpl,cForm,setCModal,setCTpl,setCForm,cErrs,setCErrs,submitComplete,templates,setTemplates,notify}) => {
+    const CModal = ({cModal,cTpl,cForm,setCModal,setCTpl,setCForm,cErrs,setCErrs,submitComplete,templates,setTemplates,notify,setEditingTemplate}) => {
       const [savingTpl, setSavingTpl] = useState(false);
       const [tplName, setTplName] = useState("");
       if(!cModal) return null;
@@ -805,6 +837,30 @@
                     <textarea className="ws-input" style={{minHeight:80,resize:"vertical",fontFamily:"'Noto Serif JP',serif",fontSize:13,fontWeight:300,lineHeight:1.7}} placeholder="Any additional observations or notes…" value={cForm.additionalNotes||""} onChange={e=>sc2("additionalNotes",e.target.value)}/>
                   </div>
                   <div>
+                    <div style={lblStyle}>Site Photos <span style={{color:"var(--text-dim)",fontWeight:300,letterSpacing:"0.04em",textTransform:"none"}}>(optional — stored locally, not in PDF)</span></div>
+                    {cForm.photos&&cForm.photos.length>0&&(
+                      <div className="photo-grid" style={{marginBottom:10}}>
+                        {cForm.photos.map((p,i)=>(
+                          <div key={i} style={{position:"relative"}}>
+                            <img src={p} className="photo-thumb" alt={`Photo ${i+1}`}/>
+                            <button onClick={()=>sc2("photos",cForm.photos.filter((_,x)=>x!==i))} style={{position:"absolute",top:3,right:3,background:"rgba(20,18,16,0.7)",border:"none",borderRadius:"50%",width:18,height:18,color:"#fff",cursor:"pointer",fontSize:10,lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center",padding:0}}>×</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {(cForm.photos||[]).length<5&&(
+                      <label style={{display:"inline-flex",alignItems:"center",gap:8,cursor:"pointer",border:"1px dashed var(--card-border)",borderRadius:2,padding:"10px 16px",fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,color:"var(--text-sec)",letterSpacing:"0.08em",transition:"border-color 0.15s"}} onMouseEnter={e=>e.currentTarget.style.borderColor="var(--nori)"} onMouseLeave={e=>e.currentTarget.style.borderColor="var(--card-border)"}>
+                        <span style={{fontSize:16}}>📷</span> Add photo
+                        <input type="file" accept="image/*" multiple capture="environment" style={{display:"none"}} onChange={async e=>{
+                          const files=Array.from(e.target.files).slice(0,5-(cForm.photos||[]).length);
+                          const compressed=await Promise.all(files.map(f=>compressImage(f)));
+                          sc2("photos",[...(cForm.photos||[]),...compressed.filter(Boolean)]);
+                          e.target.value="";
+                        }}/>
+                      </label>
+                    )}
+                  </div>
+                  <div>
                     <div style={{...lblStyle,marginBottom:10}}>Client Signature <span style={{color:"var(--text-dim)",fontWeight:300,letterSpacing:"0.04em",textTransform:"none"}}>(optional)</span></div>
                     <SignaturePad value={cForm.signatureDataUrl} onChange={v=>sc2("signatureDataUrl",v)}/>
                   </div>
@@ -836,6 +892,20 @@
         </div>
       );
     };
+
+    const compressImage = (file, maxPx=800, quality=0.65) => new Promise(resolve=>{
+      const img=new Image(), url=URL.createObjectURL(file);
+      img.onload=()=>{
+        const sc=Math.min(1,maxPx/Math.max(img.width,img.height));
+        const w=Math.round(img.width*sc), h=Math.round(img.height*sc);
+        const cv=document.createElement("canvas"); cv.width=w; cv.height=h;
+        cv.getContext("2d").drawImage(img,0,0,w,h);
+        URL.revokeObjectURL(url);
+        resolve(cv.toDataURL("image/jpeg",quality));
+      };
+      img.onerror=()=>{URL.revokeObjectURL(url);resolve(null);};
+      img.src=url;
+    });
 
     const generatePDF = (job, report) => {
       if(!window.jspdf){console.error("jsPDF not loaded");return;}
@@ -872,6 +942,7 @@
         doc.setFontSize(11);doc.setTextColor(78,104,70);doc.setFont("helvetica","bold");
         doc.text("SITE VISIT REPORT",M,y); y+=10;
         if(report.arrivedAt){lbl("Arrived on site at",M,y);y+=5;val(report.arrivedAt,M,y,CW);y+=10;}
+        if(report.arrivedAt&&job.completedAt){try{const[ah,am]=report.arrivedAt.split(":").map(Number);const arr=new Date(job.due);arr.setHours(ah,am,0,0);const diffMs=new Date(job.completedAt)-arr;if(diffMs>0){const tot=Math.floor(diffMs/60000);const hrs=Math.floor(tot/60),mins=tot%60;lbl("Time on Site",M,y);y+=5;val(hrs>0?`${hrs} hr ${mins} min`:`${mins} min`,M,y,CW);y+=10;}}catch(e){}}
         if(report.metWith){lbl("Met with",M,y);y+=5;const ml=val(report.metWith,M,y,CW);y+=ml*6+4;}
         if(report.clientContact){lbl("Client Contact",M,y);y+=5;const cl=val(report.clientContact,M,y,CW);y+=cl*6+6;}
         if(report.signatureDataUrl){
@@ -930,6 +1001,51 @@
       </div>
     );
 
+    /* ── History row (must live outside App to keep hooks stable) ─────── */
+    const HistRow = ({job, total, idx, onPhotoClick}) => {
+      const [expanded, setExpanded] = useState(false);
+      const sc = SC[job.status];
+      const photos = load(`jc-photos-${job.id}`, []);
+      return (
+        <div>
+          <div className="hist-row" style={{padding:"14px 20px",borderBottom:idx<total-1?"1px solid var(--card-border)":"none",display:"flex",alignItems:"flex-start",gap:14}} onClick={()=>setExpanded(e=>!e)}>
+            <div style={{width:3,height:36,background:sc.dot,borderRadius:1,flexShrink:0,marginTop:2}}/>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
+                <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,color:"var(--text-dim)",letterSpacing:"0.1em"}}>JC-{String(job.id).padStart(4,"0")}</span>
+                <Pill status={job.status}/>
+                {photos.length>0&&<span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,color:"var(--text-sec)",letterSpacing:"0.08em"}}>📷 {photos.length}</span>}
+              </div>
+              <div style={{fontFamily:"'Noto Serif JP',serif",fontSize:14,color:"var(--text-pri)",fontWeight:400,marginBottom:4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{job.title}</div>
+              <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+                <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,color:"var(--text-sec)"}}>{job.assignee||"Unassigned"}</span>
+                <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,color:"var(--text-dim)"}}>Due {fmtDate(job.due)}</span>
+                {job.completedAt&&<span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,color:"var(--matcha)"}}>✓ {job.completedAt.slice(0,10)}</span>}
+              </div>
+            </div>
+            <span style={{color:"var(--text-dim)",fontSize:12,marginTop:10,flexShrink:0,transition:"transform 0.2s",transform:expanded?"rotate(180deg)":"none"}}>▾</span>
+          </div>
+          {expanded&&(
+            <div style={{padding:"14px 20px 20px",background:"rgba(122,110,94,0.04)",borderBottom:idx<total-1?"1px solid var(--card-border)":"none"}}>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:16,marginBottom:photos.length>0?16:0}}>
+                {[{k:"Category",v:job.category},{k:"Priority",v:job.priority},{k:"Location",v:job.location},{k:"Created",v:fmtDate(job.created)},...(job.completionReport?.arrivedAt?[{k:"Arrived at",v:job.completionReport.arrivedAt}]:[]),...(job.completionReport?.metWith?[{k:"Met with",v:job.completionReport.metWith}]:[])].map(({k,v})=>(
+                  <div key={k}><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:8,letterSpacing:"0.14em",color:"var(--text-dim)",marginBottom:4,textTransform:"uppercase"}}>{k}</div><div style={{fontFamily:"'Noto Serif JP',serif",fontSize:13,color:"var(--text-pri)",fontWeight:300}}>{v||"—"}</div></div>
+                ))}
+              </div>
+              {photos.length>0&&(
+                <div>
+                  <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:8,letterSpacing:"0.14em",color:"var(--text-dim)",marginBottom:8,textTransform:"uppercase"}}>Site Photos</div>
+                  <div className="photo-grid">
+                    {photos.map((p,pi)=><img key={pi} src={p} className="photo-thumb" alt={`Photo ${pi+1}`} onClick={e=>{e.stopPropagation();onPhotoClick(p);}}/>)}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      );
+    };
+
     /* ── Main App ────────────────────────────────────────────────────────── */
     function App() {
       const [jobs,setJobsRaw] = useState(()=>load("jc-jobs",SEED));
@@ -950,7 +1066,7 @@
       const [showInstall,setShowInstall] = useState(false);
       const [cModal,setCModal] = useState(null);
       const [cTpl,setCTpl]    = useState(null);
-      const [cForm,setCForm]  = useState({arrivedAt:"",metWith:"",clientContact:"",workCompleted:[""],workRemaining:[""],additionalNotes:"",signatureDataUrl:null});
+      const [cForm,setCForm]  = useState({arrivedAt:"",metWith:"",clientContact:"",workCompleted:[""],workRemaining:[""],additionalNotes:"",signatureDataUrl:null,photos:[]});
       const [templates,setTemplatesRaw] = useState(()=>load("jc-templates",[]));
       const setTemplates = t=>{setTemplatesRaw(t);save("jc-templates",t);};
       const [cErrs,setCErrs]  = useState({});
@@ -980,6 +1096,23 @@
       const [calMode,setCalMode]                     = useState("individual");
       const [teamAssignees,setTeamAssignees]         = useState(()=>load("jc-assignees",SEED_ASSIGNEES).filter(a=>a!=="Unassigned").slice(0,4));
       const [calAssigneeFilter,setCalAssigneeFilter] = useState("All");
+      const [acctTab,setAcctTab]     = useState("account");
+      const [reportTab,setReportTab] = useState("overview");
+      const [rFSt,setRFSt]     = useState("All");
+      const [rFPr,setRFPr]     = useState("All");
+      const [rFAss,setRFAss]   = useState("All");
+      const [rFCat,setRFCat]   = useState("All");
+      const [rSrch,setRSrch]   = useState("");
+      const [rDateFrom,setRDateFrom] = useState("");
+      const [rDateTo,setRDateTo]     = useState("");
+      const [lightboxSrc,setLightboxSrc] = useState(null);
+      const [editingTemplate,setEditingTemplate] = useState(null);
+      const [tplEditForm,setTplEditForm] = useState({});
+      const [newAssignee,setNewAssignee] = useState("");
+      const [editAss,setEditAss]       = useState(null);
+      const [editAssVal,setEditAssVal] = useState("");
+      const [editUserId,setEditUserId]   = useState(null);
+      const [editUserName,setEditUserName] = useState("");
 
       const setJobs = u => setJobsRaw(p=>{ const n=typeof u==="function"?u(p):u; save("jc-jobs",n); return n; });
       const setDark = v => { const d=typeof v==="function"?v(dark):v; setDarkRaw(d); save("jc-dark",d); };
@@ -1043,7 +1176,7 @@
       const submitForm=()=>{
         if(!validate())return;
         if(edit){setJobs(js=>js.map(j=>j.id===form.id?{...form}:j));setSelId(form.id);setView("detail");notify("Changes saved");}
-        else{const nj={...form,id:uid.current++,created:today()};save("jc-uid",uid.current);setJobs(js=>[nj,...js]);if(formOrigin==="calendar"){setTab("calendar");setView("home");}else setView("home");notify("Jobcard created");}
+        else{const nj={...form,id:uid.current++,created:today()};save("jc-uid",uid.current);setJobs(js=>[nj,...js]);if(formOrigin==="calendar"){setTab("calendar");setView("home");}else setView("home");notify("Jobcard created");if(form.assignee&&form.assignee!=="Unassigned")pushNotify("New Work Order Assigned",`${form.title} → ${form.assignee}`);}
       };
 
       const doDelete=()=>{setJobs(js=>js.filter(j=>j.id!==selId));setDelModal(false);setSelId(null);setView("home");notify("Deleted","err");};
@@ -1052,7 +1185,7 @@
         if(status==="Completed"){
           const base=job.inProgressAt?new Date(job.inProgressAt):new Date();
           const hh=String(base.getHours()).padStart(2,"0"),mm=String(base.getMinutes()).padStart(2,"0");
-          setCForm({arrivedAt:`${hh}:${mm}`,metWith:"",clientContact:"",workCompleted:[""],workRemaining:[""],additionalNotes:"",signatureDataUrl:null});
+          setCForm({arrivedAt:`${hh}:${mm}`,metWith:"",clientContact:"",workCompleted:[""],workRemaining:[""],additionalNotes:"",signatureDataUrl:null,photos:[]});
           setCErrs({}); setCTpl(null); setCModal({job});
         } else {
           const updated={...job,status,...(status==="In Progress"&&!job.inProgressAt?{inProgressAt:new Date().toISOString()}:{})};
@@ -1088,12 +1221,29 @@
         }
         setCErrs({});
         const{job}=cModal;
+        const now=new Date().toISOString();
         const rpt=cTpl==="site-visit"?{templateType:"site-visit",arrivedAt:cForm.arrivedAt,metWith:cForm.metWith,clientContact:cForm.clientContact,workCompleted:cForm.workCompleted.filter(l=>l.trim()),workRemaining:cForm.workRemaining.filter(l=>l.trim()),additionalNotes:cForm.additionalNotes?.trim()||null,signatureDataUrl:cForm.signatureDataUrl||null}:null;
-        const completed={...job,status:"Completed",completionReport:rpt};
+        const completed={...job,status:"Completed",completedAt:now,completionReport:rpt};
+        if((cForm.photos||[]).length>0) save(`jc-photos-${job.id}`,cForm.photos);
         setJobs(js=>js.map(j=>j.id===job.id?completed:j));
         const pdfDoc=generatePDF(completed,rpt);
         setCModal(null); setCTpl(null); notify("Jobcard complete — PDF saved");
         sendEmail(completed,pdfDoc);
+      };
+
+      const pushNotify = async(title,body)=>{
+        try{
+          if(!("Notification" in window))return;
+          if(Notification.permission==="granted"){
+            const reg=await navigator.serviceWorker.ready;
+            reg.showNotification(title,{body,tag:"jc-assign",renotify:true,icon:""});
+          }
+        }catch(e){}
+      };
+      const requestNotifPerm = async()=>{
+        if("Notification" in window && Notification.permission==="default"){
+          await Notification.requestPermission();
+        }
       };
 
       const handleSignIn = async(em,pw)=>{
@@ -1101,6 +1251,7 @@
         const u=users.find(u=>u.email.toLowerCase()===em.toLowerCase()&&u.pwHash===h);
         if(!u)return "Invalid email or password";
         setSession({userId:u.id,email:u.email,name:u.name,isAdmin:u.isAdmin||false});
+        requestNotifPerm();
         return null;
       };
       const handleRegister = async(em,nm,pw)=>{
@@ -1110,6 +1261,7 @@
         const nu={id:Date.now(),email:em,name:nm,pwHash:h,isAdmin};
         setUsersStore([...users,nu]);
         setSession({userId:nu.id,email:nu.email,name:nu.name,isAdmin});
+        requestNotifPerm();
         return null;
       };
       const handleSignOut=()=>setSession(null);
@@ -1127,6 +1279,7 @@
         <div className="tab-bar">
           <button className={`tab-btn${tab==="list"?" active":""}`} onClick={()=>{setTab("list");setView("home");}}>LIST</button>
           <button className={`tab-btn${tab==="calendar"?" active":""}`} onClick={()=>setTab("calendar")}>CALENDAR</button>
+          <button className={`tab-btn${tab==="reports"?" active":""}`} onClick={()=>setTab("reports")}>REPORTS</button>
           <button className={`tab-btn${tab==="settings"?" active":""}`} onClick={()=>setTab("settings")}>ACCOUNT</button>
         </div>
       );
@@ -1266,7 +1419,7 @@
       };
 
       const pg={dark,offline,toast,showInstall,onInstall:triggerInstall,onDismissInstall:()=>setShowInstall(false)};
-      const cm={cModal,cTpl,cForm,setCModal,setCTpl,setCForm,cErrs,setCErrs,submitComplete,templates,setTemplates,notify};
+      const cm={cModal,cTpl,cForm,setCModal,setCTpl,setCForm,cErrs,setCErrs,submitComplete,templates,setTemplates,notify,setEditingTemplate};
 
       if(!session) return <SignIn users={users} onSignIn={handleSignIn} onRegister={handleRegister}/>;
 
@@ -1283,98 +1436,169 @@
       if(tab==="settings") return (
         <Page {...pg}>
           <TabNav/>
-          <div style={{maxWidth:480}}>
-            <div style={{marginBottom:36}}>
+          <div style={{maxWidth:520}}>
+            <div style={{marginBottom:28}}>
               <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.24em",color:"var(--text-dim)",marginBottom:10,fontWeight:300}}>ACCOUNT</div>
               <h2 style={{fontFamily:"'Noto Serif JP',serif",fontWeight:300,fontSize:28,color:"var(--text-pri)",letterSpacing:"0.04em"}}>Settings</h2>
               <BrushStroke variant={1} style={{marginTop:12}}/>
             </div>
 
-            <div className="ws-card" style={{padding:"24px 28px",borderRadius:2,marginBottom:16}}>
-              <SL s={0}>Profile</SL>
-              <div style={{display:"flex",flexDirection:"column",gap:14}}>
-                <div>
-                  <FL c="Name"/>
-                  <div style={{fontFamily:"'Noto Serif JP',serif",fontSize:15,color:"var(--text-pri)",fontWeight:400}}>{session.name}</div>
-                </div>
-                <div>
-                  <FL c="Email"/>
-                  <div style={{fontFamily:"'Noto Serif JP',serif",fontSize:14,color:"var(--text-sec)",fontWeight:300}}>{session.email}</div>
-                </div>
-                {session.isAdmin&&(
-                  <div style={{display:"inline-flex",alignItems:"center",gap:6,padding:"3px 10px",borderRadius:1,background:"rgba(55,74,106,0.08)",border:"1px solid rgba(55,74,106,0.25)",alignSelf:"flex-start"}}>
-                    <span style={{width:5,height:5,borderRadius:"50%",background:"var(--indigo)",display:"inline-block"}}/>
-                    <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,color:"var(--indigo)",letterSpacing:"0.12em",fontWeight:500}}>ADMINISTRATOR</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="ws-card" style={{padding:"24px 28px",borderRadius:2,marginBottom:16}}>
-              <SL s={1}>Appearance</SL>
-              <div style={{display:"flex",alignItems:"center",gap:12}}>
-                <ModeToggle/>
-                <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:12,color:"var(--text-sec)",fontWeight:300}}>{dark?"Dark mode enabled":"Light mode enabled"}</span>
-              </div>
-            </div>
-
+            {/* Sub-tab bar — Admin only sees both tabs */}
             {session.isAdmin&&(
+              <div className="sub-tab-bar" style={{marginBottom:24}}>
+                <button className={`sub-tab-btn${acctTab==="account"?" active":""}`} onClick={()=>setAcctTab("account")}>Account</button>
+                <button className={`sub-tab-btn${acctTab==="admin"?" active":""}`} onClick={()=>setAcctTab("admin")}>Admin</button>
+              </div>
+            )}
+
+            {/* ── ACCOUNT sub-tab ─────────────────────────── */}
+            {(acctTab==="account"||!session.isAdmin)&&(<>
+              <div className="ws-card" style={{padding:"24px 28px",borderRadius:2,marginBottom:16}}>
+                <SL s={0}>Profile</SL>
+                <div style={{display:"flex",flexDirection:"column",gap:14}}>
+                  <div><FL c="Name"/><div style={{fontFamily:"'Noto Serif JP',serif",fontSize:15,color:"var(--text-pri)",fontWeight:400}}>{session.name}</div></div>
+                  <div><FL c="Email"/><div style={{fontFamily:"'Noto Serif JP',serif",fontSize:14,color:"var(--text-sec)",fontWeight:300}}>{session.email}</div></div>
+                  {session.isAdmin&&(<div style={{display:"inline-flex",alignItems:"center",gap:6,padding:"3px 10px",borderRadius:1,background:"rgba(55,74,106,0.08)",border:"1px solid rgba(55,74,106,0.25)",alignSelf:"flex-start"}}><span style={{width:5,height:5,borderRadius:"50%",background:"var(--indigo)",display:"inline-block"}}/><span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,color:"var(--indigo)",letterSpacing:"0.12em",fontWeight:500}}>ADMINISTRATOR</span></div>)}
+                </div>
+              </div>
+              <div className="ws-card" style={{padding:"24px 28px",borderRadius:2,marginBottom:16}}>
+                <SL s={1}>Appearance</SL>
+                <div style={{display:"flex",alignItems:"center",gap:12}}>
+                  <ModeToggle/>
+                  <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:12,color:"var(--text-sec)",fontWeight:300}}>{dark?"Dark mode":"Light mode"}</span>
+                </div>
+              </div>
+              <BrushStroke variant={0} style={{margin:"8px 0 24px"}}/>
+              <button className="ws-btn-danger" onClick={handleSignOut} style={{letterSpacing:"0.12em"}}>Sign out</button>
+            </>)}
+
+            {/* ── ADMIN sub-tab ────────────────────────────── */}
+            {acctTab==="admin"&&session.isAdmin&&(<>
+
+              {/* Registered Users */}
               <div className="ws-card" style={{padding:"24px 28px",borderRadius:2,marginBottom:16}}>
                 <SL s={2}>Registered Users</SL>
                 <div style={{display:"flex",flexDirection:"column"}}>
                   {users.map((u,i)=>(
-                    <div key={u.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0",borderBottom:i<users.length-1?"1px solid var(--card-border)":"none"}}>
-                      <div>
-                        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
-                          <span style={{fontFamily:"'Noto Serif JP',serif",fontSize:14,color:"var(--text-pri)",fontWeight:400}}>{u.name}</span>
-                          {u.isAdmin&&<span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:8,color:"var(--indigo)",letterSpacing:"0.12em",fontWeight:500}}>ADMIN</span>}
-                        </div>
-                        <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,color:"var(--text-sec)",fontWeight:300}}>{u.email}</div>
+                    <div key={u.id} className="user-admin-row" style={{borderBottom:i<users.length-1?"1px solid var(--card-border)":"none"}}>
+                      <div style={{flex:1,minWidth:0}}>
+                        {editUserId===u.id?(
+                          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                            <input className="ws-input" style={{flex:1,padding:"6px 10px",fontSize:13}} value={editUserName} onChange={e=>setEditUserName(e.target.value)} autoFocus onKeyDown={e=>{if(e.key==="Enter"){setUsersStore(users.map(x=>x.id===u.id?{...x,name:editUserName.trim()||x.name}:x));setEditUserId(null);notify("User updated");}if(e.key==="Escape")setEditUserId(null);}}/>
+                            <button className="cs-item-action" onClick={()=>{setUsersStore(users.map(x=>x.id===u.id?{...x,name:editUserName.trim()||x.name}:x));setEditUserId(null);notify("User updated");}} style={{color:"var(--matcha)",opacity:1,fontSize:15}}>✓</button>
+                            <button className="cs-item-action" onClick={()=>setEditUserId(null)} style={{opacity:1}}>✕</button>
+                          </div>
+                        ):(
+                          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:3}}>
+                            <span style={{fontFamily:"'Noto Serif JP',serif",fontSize:14,color:"var(--text-pri)",fontWeight:400}}>{u.name}</span>
+                            {u.isAdmin&&<span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:8,color:"var(--indigo)",letterSpacing:"0.12em",fontWeight:500}}>ADMIN</span>}
+                          </div>
+                        )}
+                        {editUserId!==u.id&&<div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,color:"var(--text-sec)",fontWeight:300}}>{u.email}</div>}
                       </div>
-                      {u.id!==session.userId&&(
-                        <button
-                          onClick={()=>{setUsersStore(users.filter(x=>x.id!==u.id));notify(`Removed ${u.name}`,"err");}}
-                          className="ws-btn-danger"
-                          style={{padding:"5px 12px",fontSize:10}}
-                        >Remove</button>
+                      {editUserId!==u.id&&(
+                        <div style={{display:"flex",gap:6,flexShrink:0}}>
+                          <button className="ws-btn-ghost" style={{padding:"5px 10px",fontSize:10}} onClick={()=>{setEditUserId(u.id);setEditUserName(u.name);}}>✎ Edit</button>
+                          {u.id!==session.userId&&<button className="ws-btn-danger" style={{padding:"5px 10px",fontSize:10}} onClick={()=>{setUsersStore(users.filter(x=>x.id!==u.id));notify(`Removed ${u.name}`,"err");}}>Remove</button>}
+                        </div>
                       )}
                     </div>
                   ))}
                 </div>
               </div>
-            )}
 
-            <div className="ws-card" style={{padding:"24px 28px",borderRadius:2,marginBottom:16}}>
-              <SL s={0}>Report Templates</SL>
-              {templates.length===0 ? (
-                <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:12,color:"var(--text-dim)",fontWeight:300,paddingBottom:4}}>No saved templates. Fill out a completion report and use "Save current form as template" to create one.</div>
-              ) : (
+              {/* Assignee Management */}
+              <div className="ws-card" style={{padding:"24px 28px",borderRadius:2,marginBottom:16}}>
+                <SL s={0}>Assignee Management</SL>
+                <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,color:"var(--text-sec)",fontWeight:300,marginBottom:16}}>Manage the assignee list used on all work orders.</div>
                 <div style={{display:"flex",flexDirection:"column"}}>
-                  {templates.map((t,i)=>(
-                    <div key={t.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0",borderBottom:i<templates.length-1?"1px solid var(--card-border)":"none"}}>
-                      <div>
-                        <div style={{fontFamily:"'Noto Serif JP',serif",fontSize:14,color:"var(--text-pri)",fontWeight:400,marginBottom:3}}>{t.name}</div>
-                        <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,color:"var(--text-dim)",fontWeight:300}}>Site Visit Report · Custom</div>
-                      </div>
-                      <button className="ws-btn-danger" onClick={()=>{setTemplates(templates.filter(x=>x.id!==t.id));notify(`"${t.name}" deleted`,"err");}} style={{padding:"5px 12px",fontSize:10}}>Delete</button>
+                  {assignees.map((a,i)=>(
+                    <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 0",borderBottom:i<assignees.length-1?"1px solid var(--card-border)":"none"}}>
+                      {editAss===i?(
+                        <div style={{display:"flex",gap:8,alignItems:"center",flex:1}}>
+                          <input className="ws-input" style={{flex:1,padding:"6px 10px",fontSize:13}} value={editAssVal} onChange={e=>setEditAssVal(e.target.value)} autoFocus onKeyDown={e=>{if(e.key==="Enter"){const nxt=assignees.map((x,xi)=>xi===i?editAssVal.trim()||x:x);setAssignees(nxt);setEditAss(null);}if(e.key==="Escape")setEditAss(null);}}/>
+                          <button className="cs-item-action" onClick={()=>{const nxt=assignees.map((x,xi)=>xi===i?editAssVal.trim()||x:x);setAssignees(nxt);setEditAss(null);}} style={{color:"var(--matcha)",opacity:1,fontSize:15}}>✓</button>
+                          <button className="cs-item-action" onClick={()=>setEditAss(null)} style={{opacity:1}}>✕</button>
+                        </div>
+                      ):(
+                        <>
+                          <span style={{fontFamily:"'Noto Serif JP',serif",fontSize:14,color:"var(--text-pri)",fontWeight:400}}>{a}</span>
+                          <div style={{display:"flex",gap:6}}>
+                            <button className="cs-item-action" style={{opacity:1,color:"var(--text-sec)",fontSize:13}} onClick={()=>{setEditAss(i);setEditAssVal(a);}}>✎</button>
+                            <button className="cs-item-action del" style={{opacity:1,fontSize:13}} onClick={()=>{const nxt=assignees.filter((_,xi)=>xi!==i);setAssignees(nxt);}}>✕</button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
+                <div style={{display:"flex",gap:8,marginTop:14}}>
+                  <input className="ws-input" style={{flex:1,padding:"8px 12px"}} placeholder="New assignee name…" value={newAssignee} onChange={e=>setNewAssignee(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&newAssignee.trim()){setAssignees([...assignees,newAssignee.trim()]);setNewAssignee("");}}}/>
+                  <button className="ws-btn-primary" style={{padding:"8px 16px",fontSize:11}} onClick={()=>{if(newAssignee.trim()){setAssignees([...assignees,newAssignee.trim()]);setNewAssignee("");}}}>+ Add</button>
+                </div>
+              </div>
 
-            {session.isAdmin&&(
+              {/* Report Templates */}
+              <div className="ws-card" style={{padding:"24px 28px",borderRadius:2,marginBottom:16}}>
+                <SL s={0}>Report Templates</SL>
+                {templates.length===0?(
+                  <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:12,color:"var(--text-dim)",fontWeight:300,paddingBottom:4}}>No saved templates. Complete a job report and use "Save as template" to create one.</div>
+                ):(
+                  <div style={{display:"flex",flexDirection:"column",gap:0}}>
+                    {templates.map((t,i)=>(
+                      <div key={t.id} style={{borderBottom:i<templates.length-1?"1px solid var(--card-border)":"none",paddingBottom:editingTemplate===t.id?16:0}}>
+                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 0"}}>
+                          <div>
+                            <div style={{fontFamily:"'Noto Serif JP',serif",fontSize:14,color:"var(--text-pri)",fontWeight:400,marginBottom:2}}>{t.name}</div>
+                            <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,color:"var(--text-dim)",fontWeight:300}}>Site Visit · Custom</div>
+                          </div>
+                          <div style={{display:"flex",gap:6}}>
+                            <button className="ws-btn-ghost" style={{padding:"5px 10px",fontSize:10}} onClick={()=>{if(editingTemplate===t.id){setEditingTemplate(null);}else{setEditingTemplate(t.id);setTplEditForm({...t});}}}>
+                              {editingTemplate===t.id?"Cancel":"✎ Edit"}
+                            </button>
+                            <button className="ws-btn-danger" style={{padding:"5px 10px",fontSize:10}} onClick={()=>{setTemplates(templates.filter(x=>x.id!==t.id));notify(`"${t.name}" deleted`,"err");}}>Delete</button>
+                          </div>
+                        </div>
+                        {editingTemplate===t.id&&(
+                          <div style={{display:"flex",flexDirection:"column",gap:14,padding:"14px 16px",background:"var(--input-bg)",border:"1px solid var(--card-border)",borderRadius:2,marginBottom:8}}>
+                            <div>
+                              <FL c="Template Name"/>
+                              <input className="ws-input" value={tplEditForm.name||""} onChange={e=>setTplEditForm(f=>({...f,name:e.target.value}))} style={{padding:"8px 12px"}}/>
+                            </div>
+                            <div>
+                              <FL c="Met with (default)"/>
+                              <input className="ws-input" placeholder="Name or role…" value={tplEditForm.metWith||""} onChange={e=>setTplEditForm(f=>({...f,metWith:e.target.value}))} style={{padding:"8px 12px"}}/>
+                            </div>
+                            <div>
+                              <FL c="Work Completed (defaults)"/>
+                              <BulletEd items={tplEditForm.workCompleted?.length?tplEditForm.workCompleted:[""]} onChange={v=>setTplEditForm(f=>({...f,workCompleted:v}))} ph="Work completed item…"/>
+                            </div>
+                            <div>
+                              <FL c="Work Remaining (defaults)"/>
+                              <BulletEd items={tplEditForm.workRemaining?.length?tplEditForm.workRemaining:[""]} onChange={v=>setTplEditForm(f=>({...f,workRemaining:v}))} ph="Work remaining item…"/>
+                            </div>
+                            <div>
+                              <FL c="Additional Notes (default)"/>
+                              <textarea className="ws-input" style={{minHeight:64,resize:"vertical",fontSize:13}} value={tplEditForm.additionalNotes||""} onChange={e=>setTplEditForm(f=>({...f,additionalNotes:e.target.value}))}/>
+                            </div>
+                            <button className="ws-btn-primary" style={{alignSelf:"flex-start",fontSize:11,padding:"8px 18px"}} onClick={()=>{setTemplates(templates.map(x=>x.id===t.id?{...tplEditForm,id:t.id}:x));setEditingTemplate(null);notify("Template updated");}}>Save Changes</button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Email / SMTP */}
               <div className="ws-card" style={{padding:"24px 28px",borderRadius:2,marginBottom:16}}>
                 <SL s={1}>Email / SMTP</SL>
                 <div style={{display:"flex",flexDirection:"column",gap:14}}>
                   <FG label="Proxy Endpoint URL"><input className="ws-input" placeholder="https://….netlify.app/.netlify/functions/send-email" value={eCfg.endpointUrl||""} onChange={e=>setECfg(c=>({...c,endpointUrl:e.target.value}))}/></FG>
                   <FG label="Sender Display Name"><input className="ws-input" placeholder="JobFlow Notifications" value={eCfg.senderName||""} onChange={e=>setECfg(c=>({...c,senderName:e.target.value}))}/></FG>
                   <FG label="SMTP Provider">
-                    <CustomSelect
-                      value={eCfg.provider||"Gmail"}
-                      onChange={v=>{const p=SMTP_PROVIDERS.find(x=>x.label===v);setECfg(c=>({...c,provider:v,...(p&&p.label!=="Custom"?{host:p.host,port:p.port,secure:p.secure}:{})}));}}
-                      options={SMTP_PROVIDERS.map(p=>({value:p.label,label:p.label}))}
-                    />
+                    <CustomSelect value={eCfg.provider||"Gmail"} onChange={v=>{const p=SMTP_PROVIDERS.find(x=>x.label===v);setECfg(c=>({...c,provider:v,...(p&&p.label!=="Custom"?{host:p.host,port:p.port,secure:p.secure}:{})}))};}
+                      options={SMTP_PROVIDERS.map(p=>({value:p.label,label:p.label}))}/>
                   </FG>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 88px",gap:12}}>
                     <FG label="SMTP Host"><input className="ws-input" placeholder="smtp.gmail.com" value={eCfg.host||""} onChange={e=>setECfg(c=>({...c,host:e.target.value,provider:"Custom"}))}/></FG>
@@ -1391,13 +1615,133 @@
                   <button className="ws-btn-primary" style={{alignSelf:"flex-start",fontSize:11,padding:"9px 20px",letterSpacing:"0.12em"}} onClick={()=>{setEmailCfg(eCfg);notify("Email settings saved");}}>Save</button>
                 </div>
               </div>
-            )}
-
-            <BrushStroke variant={0} style={{margin:"8px 0 24px"}}/>
-            <button className="ws-btn-danger" onClick={handleSignOut} style={{letterSpacing:"0.12em"}}>Sign out</button>
+            </>)}
           </div>
         </Page>
       );
+
+      /* REPORTS */
+      if(tab==="reports"&&view!=="form") {
+        const reportJobs=jobs.filter(j=>{
+          if(rFSt!=="All"&&j.status!==rFSt)return false;
+          if(rFPr!=="All"&&j.priority!==rFPr)return false;
+          if(rFAss!=="All"&&j.assignee!==rFAss)return false;
+          if(rFCat!=="All"&&j.category!==rFCat)return false;
+          if(rSrch){const q=rSrch.toLowerCase();if(!j.title.toLowerCase().includes(q)&&!j.assignee.toLowerCase().includes(q)&&!j.category.toLowerCase().includes(q))return false;}
+          if(rDateFrom&&j.created<rDateFrom)return false;
+          if(rDateTo&&j.created>rDateTo)return false;
+          return true;
+        }).sort((a,b)=>new Date(b.created)-new Date(a.created));
+
+        const countBy=(arr,key)=>arr.reduce((acc,j)=>{acc[j[key]]=(acc[j[key]]||0)+1;return acc;},{});
+        const statusCounts=countBy(reportJobs,"status");
+        const assigneeCounts=countBy(reportJobs,"assignee");
+        const catCounts=countBy(reportJobs,"category");
+        const maxA=Math.max(1,...Object.values(assigneeCounts));
+        const maxC=Math.max(1,...Object.values(catCounts));
+
+        const exportCSV=()=>{
+          const hdr=["ID","Title","Category","Priority","Status","Assignee","Location","Created","Due","Completed"];
+          const rows=reportJobs.map(j=>[`JC-${String(j.id).padStart(4,"0")}`,`"${(j.title||"").replace(/"/g,'""')}"`,j.category,j.priority,j.status,j.assignee||"Unassigned",`"${(j.location||"").replace(/"/g,'""')}"`,j.created,j.due,j.completedAt?j.completedAt.slice(0,10):""].join(","));
+          const csv=[hdr.join(","),...rows].join("\n");
+          const a=document.createElement("a");
+          a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);
+          a.download=`jobflow-report-${today()}.csv`;
+          a.click();
+        };
+
+        const BarChart=({data,max,colorFn})=>(
+          <div className="rpt-bar-wrap">
+            {Object.entries(data).sort((a,b)=>b[1]-a[1]).map(([k,v])=>(
+              <div key={k} className="rpt-bar-row">
+                <span className="rpt-bar-label" title={k}>{k}</span>
+                <div className="rpt-bar-track" style={{opacity:1,background:"var(--card-border)"}}>
+                  <div className="rpt-bar-fill" style={{width:`${(v/max)*100}%`,background:colorFn?colorFn(k):"var(--indigo)"}}/>
+                </div>
+                <span className="rpt-bar-count">{v}</span>
+              </div>
+            ))}
+          </div>
+        );
+
+        return (
+          <Page {...pg}>
+            <TabNav/>
+            {lightboxSrc&&<div className="photo-lightbox" onClick={()=>setLightboxSrc(null)}><img src={lightboxSrc} alt="Photo" onClick={e=>e.stopPropagation()}/><button onClick={()=>setLightboxSrc(null)} style={{position:"absolute",top:16,right:16,background:"none",border:"1px solid rgba(255,255,255,0.3)",color:"#fff",cursor:"pointer",padding:"6px 14px",borderRadius:1,fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,letterSpacing:"0.08em"}}>× Close</button></div>}
+            <div style={{marginBottom:36}}>
+              <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.24em",color:"var(--text-dim)",marginBottom:10,fontWeight:300}}>ANALYTICS</div>
+              <h2 style={{fontFamily:"'Noto Serif JP',serif",fontWeight:300,fontSize:28,color:"var(--text-pri)",letterSpacing:"0.04em"}}>Reports</h2>
+              <BrushStroke variant={1} style={{marginTop:12}}/>
+            </div>
+
+            {/* Filters */}
+            <div className="ws-card" style={{padding:"20px 24px",borderRadius:2,marginBottom:24}}>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>
+                <input className="ws-input" style={{flex:"1 1 160px",padding:"9px 12px"}} placeholder="Search…" value={rSrch} onChange={e=>setRSrch(e.target.value)}/>
+                <CustomSelect value={rFSt} onChange={setRFSt} options={[{value:"All",label:"All Status"},...STATS.map(o=>({value:o,label:o}))]} style={{flex:"1 1 120px"}}/>
+                <CustomSelect value={rFPr} onChange={setRFPr} options={[{value:"All",label:"All Priority"},...PRIS.map(p=>({value:p,label:p}))]} style={{flex:"1 1 120px"}}/>
+                <CustomSelect value={rFAss} onChange={setRFAss} options={[{value:"All",label:"All Assignees"},...assignees.map(a=>({value:a,label:a}))]} style={{flex:"1 1 140px"}}/>
+                <CustomSelect value={rFCat} onChange={setRFCat} options={[{value:"All",label:"All Categories"},...cats.map(c=>({value:c,label:c}))]} style={{flex:"1 1 140px"}}/>
+              </div>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+                <input type="date" className="ws-input" style={{flex:"1 1 140px",padding:"9px 12px"}} value={rDateFrom} onChange={e=>setRDateFrom(e.target.value)}/>
+                <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,color:"var(--text-dim)",letterSpacing:"0.08em"}}>to</span>
+                <input type="date" className="ws-input" style={{flex:"1 1 140px",padding:"9px 12px"}} value={rDateTo} onChange={e=>setRDateTo(e.target.value)}/>
+                {(rFSt!=="All"||rFPr!=="All"||rFAss!=="All"||rFCat!=="All"||rSrch||rDateFrom||rDateTo)&&(
+                  <button className="ws-btn-ghost" onClick={()=>{setRFSt("All");setRFPr("All");setRFAss("All");setRFCat("All");setRSrch("");setRDateFrom("");setRDateTo("");}} style={{fontSize:10,padding:"8px 14px"}}>× Clear</button>
+                )}
+              </div>
+            </div>
+
+            {/* Sub-tabs */}
+            <div className="sub-tab-bar">
+              <button className={`sub-tab-btn${reportTab==="overview"?" active":""}`} onClick={()=>setReportTab("overview")}>Overview</button>
+              <button className={`sub-tab-btn${reportTab==="history"?" active":""}`} onClick={()=>setReportTab("history")}>History</button>
+            </div>
+
+            {reportTab==="overview"&&(
+              <div style={{display:"flex",flexDirection:"column",gap:16}}>
+                <div className="stat-grid" style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:8}}>
+                  {STATS.map(s=>{const c=SC[s];return(<div key={s} className="ws-card" style={{padding:"16px 14px",borderRadius:2,borderLeft:`2px solid ${c.dot}`}}><div style={{fontFamily:"'Noto Serif JP',serif",fontSize:32,fontWeight:300,color:c.color,lineHeight:1}}>{statusCounts[s]||0}</div><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:8,letterSpacing:"0.12em",color:"var(--text-sec)",textTransform:"uppercase",marginTop:6}}>{s}</div></div>);})}
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+                  <div className="ws-card" style={{padding:"20px 22px",borderRadius:2}}>
+                    <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.16em",color:"var(--text-sec)",textTransform:"uppercase",marginBottom:14}}>By Assignee</div>
+                    <BarChart data={assigneeCounts} max={maxA} colorFn={n=>`${SC[jobs.find(j=>j.assignee===n)?.status||"Outstanding"]?.dot||"var(--indigo)"}`}/>
+                    {Object.keys(assigneeCounts).length===0&&<div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:12,color:"var(--text-dim)",fontWeight:300}}>No data</div>}
+                  </div>
+                  <div className="ws-card" style={{padding:"20px 22px",borderRadius:2}}>
+                    <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.16em",color:"var(--text-sec)",textTransform:"uppercase",marginBottom:14}}>By Category</div>
+                    <BarChart data={catCounts} max={maxC} colorFn={()=>"var(--indigo)"}/>
+                    {Object.keys(catCounts).length===0&&<div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:12,color:"var(--text-dim)",fontWeight:300}}>No data</div>}
+                  </div>
+                </div>
+                <div className="ws-card" style={{padding:"20px 22px",borderRadius:2}}>
+                  <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.16em",color:"var(--text-sec)",textTransform:"uppercase",marginBottom:14}}>By Status — {reportJobs.length} record{reportJobs.length!==1?"s":""}</div>
+                  <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+                    {STATS.map(s=>{const c=SC[s];const cnt=statusCounts[s]||0;const pct=reportJobs.length>0?Math.round((cnt/reportJobs.length)*100):0;return(<div key={s} style={{flex:"1 1 100px",padding:"14px 16px",background:c.bg,border:`1px solid ${c.border}`,borderRadius:2,textAlign:"center"}}><div style={{fontFamily:"'Noto Serif JP',serif",fontSize:24,fontWeight:300,color:c.color,lineHeight:1}}>{cnt}</div><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:8,color:c.color,letterSpacing:"0.1em",marginTop:4,textTransform:"uppercase"}}>{s}</div><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,color:c.color,opacity:0.6,marginTop:2}}>{pct}%</div></div>);})}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {reportTab==="history"&&(
+              <div>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+                  <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.16em",color:"var(--text-sec)",textTransform:"uppercase"}}>{reportJobs.length} record{reportJobs.length!==1?"s":""}</span>
+                  <button className="ws-btn-ghost" onClick={exportCSV} style={{fontSize:10,padding:"7px 14px",letterSpacing:"0.1em"}}>↓ Export CSV</button>
+                </div>
+                {reportJobs.length===0&&<div style={{textAlign:"center",padding:"48px 20px"}}><InkBlot size={48} opacity={0.08} style={{margin:"0 auto 16px"}}/><div style={{fontFamily:"'Noto Serif JP',serif",fontSize:15,color:"var(--text-dim)",fontWeight:300}}>No records match the filters</div></div>}
+                <div className="ws-card" style={{borderRadius:2,overflow:"hidden"}}>
+                  {reportJobs.map((job,i)=>(
+                    <HistRow key={job.id} job={job} total={reportJobs.length} idx={i} onPhotoClick={setLightboxSrc}/>
+                  ))}
+                </div>
+              </div>
+            )}
+          </Page>
+        );
+      }
 
       /* HOME */
       if(view==="home") return (
@@ -1565,7 +1909,7 @@
               {edit&&<FG label="Status"><CustomSelect value={form.status||"Outstanding"} onChange={v=>sf("status",v)} options={STATS}/></FG>}
               <FG label="Due Date" error={errs.due}><input type="date" className="ws-input" value={form.due||""} onChange={e=>sf("due",e.target.value)} style={{borderColor:errs.due?"var(--aka)":undefined}}/></FG>
               <FG label="Scheduled Time"><input type="time" className="ws-input" value={form.scheduledTime||""} onChange={e=>sf("scheduledTime",e.target.value)}/></FG>
-              <FG label="Assignee" error={errs.assignee}><EditableSelect value={form.assignee||""} onChange={v=>sf("assignee",v)} items={assignees} onItemsChange={setAssignees} placeholder="Select or add assignee…"/></FG>
+              <FG label="Assignee" error={errs.assignee}><CustomSelect value={form.assignee||assignees[0]||""} onChange={v=>sf("assignee",v)} options={assignees.map(a=>({value:a,label:a}))}/></FG>
               <FG label="Location" error={errs.location}><EditableSelect value={form.location||""} onChange={v=>sf("location",v)} items={locations} onItemsChange={setLocations} placeholder="Select or add location…"/></FG>
               <FG label="Contact Person" full><ContactSelect value={form.contact||{}} onChange={v=>sf("contact",v)} contacts={contacts} onContactsChange={setContacts} placeholder="Select or add contact…"/></FG>
               <FG label="Report Recipient Email" full><input type="email" className="ws-input" placeholder="Send completion report to…" value={form.recipientEmail||""} onChange={e=>sf("recipientEmail",e.target.value)}/></FG>
