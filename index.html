@@ -621,6 +621,69 @@
       );
     };
 
+    const DatePicker = ({value, onChange, hasError, placeholder="Select date…"}) => {
+      const [open, setOpen] = useState(false);
+      const [nav,  setNav]  = useState(null);
+      const ref = useRef(null);
+      const base  = nav || (value ? new Date(value+"T00:00:00") : new Date());
+      const year  = base.getFullYear();
+      const month = base.getMonth();
+      useEffect(()=>{
+        if(!open) return;
+        const h=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);};
+        document.addEventListener("mousedown",h);document.addEventListener("touchstart",h);
+        return()=>{document.removeEventListener("mousedown",h);document.removeEventListener("touchstart",h);};
+      },[open]);
+      const fmt=v=>{if(!v)return null;const d=new Date(v+"T00:00:00");return d.toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short",year:"numeric"});};
+      const pad=n=>String(n).padStart(2,"0");
+      const toISO=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+      const firstDay=new Date(year,month,1);
+      const startDow=(firstDay.getDay()+6)%7;
+      const daysInMonth=new Date(year,month+1,0).getDate();
+      const cells=Array.from({length:startDow+daysInMonth},(_,i)=>i<startDow?null:i-startDow+1);
+      while(cells.length%7!==0)cells.push(null);
+      const MN=["January","February","March","April","May","June","July","August","September","October","November","December"];
+      const DOW=["Mo","Tu","We","Th","Fr","Sa","Su"];
+      const goM=d=>{setNav(new Date(year,month+d,1));};
+      return(
+        <div ref={ref} style={{position:"relative"}}>
+          <button className="cs-btn" style={{borderColor:hasError?"var(--aka)":undefined}}
+            onClick={()=>{setNav(value?new Date(value+"T00:00:00"):new Date());setOpen(o=>!o);}}>
+            <span style={{color:value?"inherit":"var(--text-dim)"}}>{fmt(value)||placeholder}</span>
+            {value&&<span style={{marginLeft:"auto",color:"var(--text-dim)",fontSize:11}} onClick={e=>{e.stopPropagation();onChange("");}}>✕</span>}
+            <svg width="10" height="6" viewBox="0 0 10 6" style={{transform:open?"rotate(180deg)":"none",transition:"transform 0.2s",flexShrink:0}}><polyline points="1,1 5,5 9,1" fill="none" stroke="var(--text-dim)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </button>
+          {open&&(
+            <div style={{position:"absolute",zIndex:200,top:"calc(100% + 4px)",left:0,right:0,background:"var(--card-bg)",border:"1px solid var(--card-border)",borderRadius:2,boxShadow:"0 4px 16px rgba(0,0,0,0.10)",padding:"14px 12px",minWidth:240}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+                <button onClick={()=>goM(-1)} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-sec)",fontSize:18,padding:"2px 8px",lineHeight:1}}>‹</button>
+                <span style={{fontFamily:"'Noto Serif JP',serif",fontSize:13,color:"var(--text-pri)",fontWeight:400,letterSpacing:"0.04em"}}>{MN[month]} {year}</span>
+                <button onClick={()=>goM(1)} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-sec)",fontSize:18,padding:"2px 8px",lineHeight:1}}>›</button>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:4}}>
+                {DOW.map(d=><div key={d} style={{textAlign:"center",fontFamily:"'Noto Sans JP',sans-serif",fontSize:8,color:"var(--text-dim)",letterSpacing:"0.1em",padding:"2px 0"}}>{d}</div>)}
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
+                {cells.map((day,i)=>{
+                  if(!day)return <div key={i}/>;
+                  const iso=toISO(new Date(year,month,day));
+                  const sel=iso===value;
+                  return(
+                    <button key={i} onClick={()=>{onChange(iso);setOpen(false);}}
+                      style={{padding:"6px 2px",border:"none",borderRadius:1,cursor:"pointer",background:sel?"var(--sumi)":"transparent",color:sel?"var(--washi)":"var(--text-pri)",fontFamily:"'Noto Serif JP',serif",fontSize:12,fontWeight:sel?500:300,textAlign:"center",transition:"background 0.15s"}}
+                      onMouseEnter={e=>{if(!sel)e.currentTarget.style.background="var(--input-bg)";}}
+                      onMouseLeave={e=>{if(!sel)e.currentTarget.style.background="transparent";}}>
+                      {day}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    };
+
     const BulletEd = ({items,onChange,ph}) => {
       const upd=(i,v)=>{const n=[...items];n[i]=v;onChange(n);};
       const add=(i)=>{const n=[...items];n.splice(i+1,0,"");onChange(n);};
@@ -1146,7 +1209,7 @@
         .filter(j=>{ if(!srch)return true; const q=srch.toLowerCase(); return j.title.toLowerCase().includes(q)||j.assignee.toLowerCase().includes(q)||j.category.toLowerCase().includes(q); })
         .sort((a,b)=>{
           if(sort==="due")return new Date(a.due)-new Date(b.due);
-          if(sort==="priority")return PRIS.indexOf(b.priority)-PRIS.indexOf(a.priority);
+          if(sort==="oldest")return new Date(a.created)-new Date(b.created);
           return new Date(b.created)-new Date(a.created);
         });
 
@@ -1327,36 +1390,11 @@
                   <button className="cal-nav-btn" onClick={()=>go(1)}>Next ›</button>
                 </div>
                 <span className="cal-period">{pLabel}</span>
-                <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-                  <div className="cal-view-toggle">
-                    <button className={`cal-view-btn${calMode==="individual"?" active":""}`} onClick={()=>setCalMode("individual")}>INDIV</button>
-                    <button className={`cal-view-btn${calMode==="team"?" active":""}`} onClick={()=>setCalMode("team")}>TEAM</button>
-                  </div>
-                  <div className="cal-view-toggle">
-                    <button className={`cal-view-btn${calView==="week"?" active":""}`} onClick={()=>setCalView("week")}>WEEK</button>
-                    <button className={`cal-view-btn${calView==="day"?" active":""}`} onClick={()=>setCalView("day")}>DAY</button>
-                  </div>
+                <div className="cal-view-toggle">
+                  <button className={`cal-view-btn${calView==="week"?" active":""}`} onClick={()=>setCalView("week")}>WEEK</button>
+                  <button className={`cal-view-btn${calView==="day"?" active":""}`} onClick={()=>setCalView("day")}>DAY</button>
                 </div>
               </div>
-              {calMode==="individual"&&(
-                <div style={{width:"100%",marginTop:8}}>
-                  <CustomSelect value={calAssigneeFilter} onChange={setCalAssigneeFilter} options={[{value:"All",label:"All Assignees"},...assignees.map(a=>({value:a,label:a}))]}/>
-                </div>
-              )}
-              {calMode==="team"&&(
-                <div style={{display:"flex",flexWrap:"wrap",gap:6,width:"100%",marginTop:8}}>
-                  {assignees.filter(a=>a!=="Unassigned").map(a=>{
-                    const sel=teamAssignees.includes(a);
-                    const c=aColor(a);
-                    return(
-                      <button key={a} onClick={()=>setTeamAssignees(ts=>sel?ts.filter(x=>x!==a):[...ts,a])}
-                        style={{padding:"4px 10px",border:`1px solid ${sel?c:"var(--card-border)"}`,borderRadius:1,background:sel?`${c}18`:"transparent",color:sel?c:"var(--text-dim)",fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.08em",cursor:"pointer",transition:"all 0.15s"}}>
-                        {a.split(" ")[0]}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
             </div>
             {calMode==="team"&&calView==="day"&&activeCols&&activeCols.length>0?(
               <div className="cal-grid-outer">
@@ -1440,8 +1478,6 @@
         <Page {...pg}>
           <TabNav/>
           <div style={{maxWidth:520}}>
-            <BrushStroke variant={1} style={{marginBottom:24}}/>
-
             {/* Sub-tab bar */}
             <div className="sub-tab-bar" style={{marginBottom:24}}>
               <button className={`sub-tab-btn${acctTab==="account"?" active":""}`} onClick={()=>setAcctTab("account")}>Account</button>
@@ -1611,7 +1647,7 @@
       /* REPORTS */
       if(tab==="reports"&&view!=="form") {
         const reportJobs=jobs.filter(j=>{
-          if(rFSt!=="All"&&j.status!==rFSt)return false;
+          if(j.status!=="Completed")return false;
           if(rFPr!=="All"&&j.priority!==rFPr)return false;
           if(rFAss!=="All"&&j.assignee!==rFAss)return false;
           if(rFCat!=="All"&&j.category!==rFCat)return false;
@@ -1619,14 +1655,7 @@
           if(rDateFrom&&j.created<rDateFrom)return false;
           if(rDateTo&&j.created>rDateTo)return false;
           return true;
-        }).sort((a,b)=>new Date(b.created)-new Date(a.created));
-
-        const countBy=(arr,key)=>arr.reduce((acc,j)=>{acc[j[key]]=(acc[j[key]]||0)+1;return acc;},{});
-        const statusCounts=countBy(reportJobs,"status");
-        const assigneeCounts=countBy(reportJobs,"assignee");
-        const catCounts=countBy(reportJobs,"category");
-        const maxA=Math.max(1,...Object.values(assigneeCounts));
-        const maxC=Math.max(1,...Object.values(catCounts));
+        }).sort((a,b)=>new Date(b.completedAt||b.due)-new Date(a.completedAt||a.due));
 
         const exportCSV=()=>{
           const hdr=["ID","Title","Category","Priority","Status","Assignee","Location","Created","Due","Completed"];
@@ -1666,7 +1695,6 @@
             <div className="ws-card" style={{padding:"20px 24px",borderRadius:2,marginBottom:24}}>
               <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>
                 <input className="ws-input" style={{flex:"1 1 160px",padding:"9px 12px"}} placeholder="Search…" value={rSrch} onChange={e=>setRSrch(e.target.value)}/>
-                <CustomSelect value={rFSt} onChange={setRFSt} options={[{value:"All",label:"All Status"},...STATS.map(o=>({value:o,label:o}))]} style={{flex:"1 1 120px"}}/>
                 <CustomSelect value={rFPr} onChange={setRFPr} options={[{value:"All",label:"All Priority"},...PRIS.map(p=>({value:p,label:p}))]} style={{flex:"1 1 120px"}}/>
                 <CustomSelect value={rFAss} onChange={setRFAss} options={[{value:"All",label:"All Assignees"},...assignees.map(a=>({value:a,label:a}))]} style={{flex:"1 1 140px"}}/>
                 <CustomSelect value={rFCat} onChange={setRFCat} options={[{value:"All",label:"All Categories"},...cats.map(c=>({value:c,label:c}))]} style={{flex:"1 1 140px"}}/>
@@ -1675,58 +1703,24 @@
                 <input type="date" className="ws-input" style={{flex:"1 1 140px",padding:"9px 12px"}} value={rDateFrom} onChange={e=>setRDateFrom(e.target.value)}/>
                 <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,color:"var(--text-dim)",letterSpacing:"0.08em"}}>to</span>
                 <input type="date" className="ws-input" style={{flex:"1 1 140px",padding:"9px 12px"}} value={rDateTo} onChange={e=>setRDateTo(e.target.value)}/>
-                {(rFSt!=="All"||rFPr!=="All"||rFAss!=="All"||rFCat!=="All"||rSrch||rDateFrom||rDateTo)&&(
-                  <button className="ws-btn-ghost" onClick={()=>{setRFSt("All");setRFPr("All");setRFAss("All");setRFCat("All");setRSrch("");setRDateFrom("");setRDateTo("");}} style={{fontSize:10,padding:"8px 14px"}}>× Clear</button>
+                {(rFPr!=="All"||rFAss!=="All"||rFCat!=="All"||rSrch||rDateFrom||rDateTo)&&(
+                  <button className="ws-btn-ghost" onClick={()=>{setRFPr("All");setRFAss("All");setRFCat("All");setRSrch("");setRDateFrom("");setRDateTo("");}} style={{fontSize:10,padding:"8px 14px"}}>× Clear</button>
                 )}
               </div>
             </div>
 
-            {/* Sub-tabs */}
-            <div className="sub-tab-bar">
-              <button className={`sub-tab-btn${reportTab==="overview"?" active":""}`} onClick={()=>setReportTab("overview")}>Overview</button>
-              <button className={`sub-tab-btn${reportTab==="history"?" active":""}`} onClick={()=>setReportTab("history")}>History</button>
+            <div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+                <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.16em",color:"var(--text-sec)",textTransform:"uppercase"}}>{reportJobs.length} completed record{reportJobs.length!==1?"s":""}</span>
+                <button className="ws-btn-ghost" onClick={exportCSV} style={{fontSize:10,padding:"7px 14px",letterSpacing:"0.1em"}}>↓ Export CSV</button>
+              </div>
+              {reportJobs.length===0&&<div style={{textAlign:"center",padding:"48px 20px"}}><InkBlot size={48} opacity={0.08} style={{margin:"0 auto 16px"}}/><div style={{fontFamily:"'Noto Serif JP',serif",fontSize:15,color:"var(--text-dim)",fontWeight:300}}>No completed records match the filters</div></div>}
+              <div className="ws-card" style={{borderRadius:2,overflow:"hidden"}}>
+                {reportJobs.map((job,i)=>(
+                  <HistRow key={job.id} job={job} total={reportJobs.length} idx={i} onPhotoClick={setLightboxSrc}/>
+                ))}
+              </div>
             </div>
-
-            {reportTab==="overview"&&(
-              <div style={{display:"flex",flexDirection:"column",gap:16}}>
-                <div className="stat-grid" style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:8}}>
-                  {STATS.map(s=>{const c=SC[s];return(<div key={s} className="ws-card" style={{padding:"16px 14px",borderRadius:2,borderLeft:`2px solid ${c.dot}`}}><div style={{fontFamily:"'Noto Serif JP',serif",fontSize:32,fontWeight:300,color:c.color,lineHeight:1}}>{statusCounts[s]||0}</div><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:8,letterSpacing:"0.12em",color:"var(--text-sec)",textTransform:"uppercase",marginTop:6}}>{s}</div></div>);})}
-                </div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-                  <div className="ws-card" style={{padding:"20px 22px",borderRadius:2}}>
-                    <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.16em",color:"var(--text-sec)",textTransform:"uppercase",marginBottom:14}}>By Assignee</div>
-                    <BarChart data={assigneeCounts} max={maxA} colorFn={n=>`${SC[jobs.find(j=>j.assignee===n)?.status||"Outstanding"]?.dot||"var(--indigo)"}`}/>
-                    {Object.keys(assigneeCounts).length===0&&<div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:12,color:"var(--text-dim)",fontWeight:300}}>No data</div>}
-                  </div>
-                  <div className="ws-card" style={{padding:"20px 22px",borderRadius:2}}>
-                    <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.16em",color:"var(--text-sec)",textTransform:"uppercase",marginBottom:14}}>By Category</div>
-                    <BarChart data={catCounts} max={maxC} colorFn={()=>"var(--indigo)"}/>
-                    {Object.keys(catCounts).length===0&&<div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:12,color:"var(--text-dim)",fontWeight:300}}>No data</div>}
-                  </div>
-                </div>
-                <div className="ws-card" style={{padding:"20px 22px",borderRadius:2}}>
-                  <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.16em",color:"var(--text-sec)",textTransform:"uppercase",marginBottom:14}}>By Status — {reportJobs.length} record{reportJobs.length!==1?"s":""}</div>
-                  <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-                    {STATS.map(s=>{const c=SC[s];const cnt=statusCounts[s]||0;const pct=reportJobs.length>0?Math.round((cnt/reportJobs.length)*100):0;return(<div key={s} style={{flex:"1 1 100px",padding:"14px 16px",background:c.bg,border:`1px solid ${c.border}`,borderRadius:2,textAlign:"center"}}><div style={{fontFamily:"'Noto Serif JP',serif",fontSize:24,fontWeight:300,color:c.color,lineHeight:1}}>{cnt}</div><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:8,color:c.color,letterSpacing:"0.1em",marginTop:4,textTransform:"uppercase"}}>{s}</div><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,color:c.color,opacity:0.6,marginTop:2}}>{pct}%</div></div>);})}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {reportTab==="history"&&(
-              <div>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-                  <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.16em",color:"var(--text-sec)",textTransform:"uppercase"}}>{reportJobs.length} record{reportJobs.length!==1?"s":""}</span>
-                  <button className="ws-btn-ghost" onClick={exportCSV} style={{fontSize:10,padding:"7px 14px",letterSpacing:"0.1em"}}>↓ Export CSV</button>
-                </div>
-                {reportJobs.length===0&&<div style={{textAlign:"center",padding:"48px 20px"}}><InkBlot size={48} opacity={0.08} style={{margin:"0 auto 16px"}}/><div style={{fontFamily:"'Noto Serif JP',serif",fontSize:15,color:"var(--text-dim)",fontWeight:300}}>No records match the filters</div></div>}
-                <div className="ws-card" style={{borderRadius:2,overflow:"hidden"}}>
-                  {reportJobs.map((job,i)=>(
-                    <HistRow key={job.id} job={job} total={reportJobs.length} idx={i} onPhotoClick={setLightboxSrc}/>
-                  ))}
-                </div>
-              </div>
-            )}
           </Page>
         );
       }
@@ -1755,7 +1749,7 @@
             <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
               <CustomSelect value={fSt} onChange={setFSt} options={[{value:"All",label:"All Status"},...STATS.map(o=>({value:o,label:o}))]}/>
               <CustomSelect value={fPr} onChange={setFPr} options={[{value:"All",label:"All Priority"},...PRIS.map(p=>({value:p,label:p}))]}/>
-              <CustomSelect value={sort} onChange={setSort} options={[{value:"due",label:"Due Date"},{value:"priority",label:"Priority"},{value:"created",label:"Newest"}]}/>
+              <CustomSelect value={sort} onChange={setSort} options={[{value:"due",label:"Due Date"},{value:"oldest",label:"Oldest"},{value:"created",label:"Newest"}]}/>
               {(fSt!=="All"||fPr!=="All"||srch)&&(
                 <button className="ws-btn-ghost" onClick={()=>{setFSt("All");setFPr("All");setSrch("");}} style={{fontSize:10,padding:"8px 16px",letterSpacing:"0.12em"}}>× Clear Filters</button>
               )}
@@ -1895,8 +1889,8 @@
               <FG label="Category"><EditableSelect value={form.category||cats[0]||""} onChange={v=>sf("category",v)} items={cats} onItemsChange={setCats}/></FG>
               <FG label="Priority"><CustomSelect value={form.priority||"Medium"} onChange={v=>sf("priority",v)} options={PRIS}/></FG>
               {edit&&<FG label="Status"><CustomSelect value={form.status||"Outstanding"} onChange={v=>sf("status",v)} options={STATS}/></FG>}
-              <FG label="Due Date" error={errs.due}><input type="date" className="ws-input" value={form.due||""} onChange={e=>sf("due",e.target.value)} style={{borderColor:errs.due?"var(--aka)":undefined}}/></FG>
-              <FG label="Scheduled Time"><input type="time" className="ws-input" value={form.scheduledTime||""} onChange={e=>sf("scheduledTime",e.target.value)}/></FG>
+              <FG label="Due Date" error={errs.due}><DatePicker value={form.due||""} onChange={v=>sf("due",v)} hasError={!!errs.due}/></FG>
+              <FG label="Scheduled Time"><ClockPicker value={form.scheduledTime||"09:00"} onChange={v=>sf("scheduledTime",v)}/></FG>
               <FG label="Assignee" error={errs.assignee}><CustomSelect value={form.assignee||assignees[0]||""} onChange={v=>sf("assignee",v)} options={assignees.map(a=>({value:a,label:a}))}/></FG>
               <FG label="Location" error={errs.location}><EditableSelect value={form.location||""} onChange={v=>sf("location",v)} items={locations} onItemsChange={setLocations} placeholder="Select or add location…"/></FG>
               <FG label="Contact Person" full><ContactSelect value={form.contact||{}} onChange={v=>sf("contact",v)} contacts={contacts} onContactsChange={setContacts} placeholder="Select or add contact…"/></FG>
