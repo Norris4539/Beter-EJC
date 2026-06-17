@@ -621,65 +621,60 @@
       );
     };
 
-    const DatePicker = ({value, onChange, hasError, placeholder="Select date…"}) => {
-      const [open, setOpen] = useState(false);
-      const [nav,  setNav]  = useState(null);
-      const ref = useRef(null);
-      const base  = nav || (value ? new Date(value+"T00:00:00") : new Date());
-      const year  = base.getFullYear();
-      const month = base.getMonth();
-      useEffect(()=>{
-        if(!open) return;
-        const h=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);};
-        document.addEventListener("mousedown",h);document.addEventListener("touchstart",h);
-        return()=>{document.removeEventListener("mousedown",h);document.removeEventListener("touchstart",h);};
-      },[open]);
-      const fmt=v=>{if(!v)return null;const d=new Date(v+"T00:00:00");return d.toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short",year:"numeric"});};
+    const DatePicker = ({value, onChange, hasError}) => {
+      const [nav, setNav] = useState(null);
       const pad=n=>String(n).padStart(2,"0");
       const toISO=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+      const todayISO=toISO(new Date());
+      const selDate=value?new Date(value+"T00:00:00"):null;
+      const base=nav||(selDate||new Date());
+      const year=base.getFullYear(), month=base.getMonth();
       const firstDay=new Date(year,month,1);
       const startDow=(firstDay.getDay()+6)%7;
       const daysInMonth=new Date(year,month+1,0).getDate();
       const cells=Array.from({length:startDow+daysInMonth},(_,i)=>i<startDow?null:i-startDow+1);
       while(cells.length%7!==0)cells.push(null);
       const MN=["January","February","March","April","May","June","July","August","September","October","November","December"];
+      const WD=["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
       const DOW=["Mo","Tu","We","Th","Fr","Sa","Su"];
-      const goM=d=>{setNav(new Date(year,month+d,1));};
       return(
-        <div ref={ref} style={{position:"relative"}}>
-          <button className="cs-btn" style={{borderColor:hasError?"var(--aka)":undefined}}
-            onClick={()=>{setNav(value?new Date(value+"T00:00:00"):new Date());setOpen(o=>!o);}}>
-            <span style={{color:value?"inherit":"var(--text-dim)"}}>{fmt(value)||placeholder}</span>
-            {value&&<span style={{marginLeft:"auto",color:"var(--text-dim)",fontSize:11}} onClick={e=>{e.stopPropagation();onChange("");}}>✕</span>}
-            <svg width="10" height="6" viewBox="0 0 10 6" style={{transform:open?"rotate(180deg)":"none",transition:"transform 0.2s",flexShrink:0}}><polyline points="1,1 5,5 9,1" fill="none" stroke="var(--text-dim)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-          </button>
-          {open&&(
-            <div style={{position:"absolute",zIndex:200,top:"calc(100% + 4px)",left:0,right:0,background:"var(--card-bg)",border:"1px solid var(--card-border)",borderRadius:2,boxShadow:"0 4px 16px rgba(0,0,0,0.10)",padding:"14px 12px",minWidth:240}}>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-                <button onClick={()=>goM(-1)} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-sec)",fontSize:18,padding:"2px 8px",lineHeight:1}}>‹</button>
-                <span style={{fontFamily:"'Noto Serif JP',serif",fontSize:13,color:"var(--text-pri)",fontWeight:400,letterSpacing:"0.04em"}}>{MN[month]} {year}</span>
-                <button onClick={()=>goM(1)} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-sec)",fontSize:18,padding:"2px 8px",lineHeight:1}}>›</button>
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2,marginBottom:4}}>
-                {DOW.map(d=><div key={d} style={{textAlign:"center",fontFamily:"'Noto Sans JP',sans-serif",fontSize:8,color:"var(--text-dim)",letterSpacing:"0.1em",padding:"2px 0"}}>{d}</div>)}
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:2}}>
-                {cells.map((day,i)=>{
-                  if(!day)return <div key={i}/>;
-                  const iso=toISO(new Date(year,month,day));
-                  const sel=iso===value;
-                  return(
-                    <button key={i} onClick={()=>{onChange(iso);setOpen(false);}}
-                      style={{padding:"6px 2px",border:"none",borderRadius:1,cursor:"pointer",background:sel?"var(--sumi)":"transparent",color:sel?"var(--washi)":"var(--text-pri)",fontFamily:"'Noto Serif JP',serif",fontSize:12,fontWeight:sel?500:300,textAlign:"center",transition:"background 0.15s"}}
-                      onMouseEnter={e=>{if(!sel)e.currentTarget.style.background="var(--input-bg)";}}
-                      onMouseLeave={e=>{if(!sel)e.currentTarget.style.background="transparent";}}>
-                      {day}
-                    </button>
-                  );
-                })}
-              </div>
+        <div style={{border:`1px solid ${hasError?"var(--aka)":"var(--card-border)"}`,borderRadius:2,overflow:"hidden",background:"var(--card-bg)"}}>
+          {/* Selected date header */}
+          <div style={{background:"var(--sumi)",padding:"14px 18px"}}>
+            <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:8,letterSpacing:"0.18em",color:"var(--washi)",opacity:0.55,textTransform:"uppercase",marginBottom:4}}>
+              {selDate?WD[selDate.getDay()]:"Due Date"}
             </div>
-          )}
+            <div style={{fontFamily:"'Noto Serif JP',serif",fontSize:26,fontWeight:300,color:"var(--washi)",letterSpacing:"0.02em",lineHeight:1}}>
+              {selDate?`${selDate.getDate()} ${MN[selDate.getMonth()].slice(0,3)} ${selDate.getFullYear()}`:"—"}
+            </div>
+          </div>
+          {/* Month nav */}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px 6px"}}>
+            <button onClick={()=>setNav(new Date(year,month-1,1))} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-sec)",fontSize:18,padding:"2px 8px",lineHeight:1}}>‹</button>
+            <span style={{fontFamily:"'Noto Serif JP',serif",fontSize:13,color:"var(--text-pri)",fontWeight:400,letterSpacing:"0.04em"}}>{MN[month]} {year}</span>
+            <button onClick={()=>setNav(new Date(year,month+1,1))} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-sec)",fontSize:18,padding:"2px 8px",lineHeight:1}}>›</button>
+          </div>
+          {/* DOW headers */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",padding:"0 12px 4px"}}>
+            {DOW.map(d=><div key={d} style={{textAlign:"center",fontFamily:"'Noto Sans JP',sans-serif",fontSize:8,color:"var(--text-dim)",letterSpacing:"0.1em",padding:"2px 0"}}>{d}</div>)}
+          </div>
+          {/* Day grid */}
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:1,padding:"0 12px 14px"}}>
+            {cells.map((day,i)=>{
+              if(!day)return <div key={i}/>;
+              const iso=toISO(new Date(year,month,day));
+              const sel=iso===value;
+              const isToday=iso===todayISO;
+              return(
+                <button key={i} onClick={()=>onChange(iso)}
+                  style={{padding:"7px 2px",border:isToday&&!sel?"1px solid var(--card-border)":"1px solid transparent",borderRadius:1,cursor:"pointer",background:sel?"var(--sumi)":"transparent",color:sel?"var(--washi)":isToday?"var(--indigo)":"var(--text-pri)",fontFamily:"'Noto Serif JP',serif",fontSize:12,fontWeight:sel?500:300,textAlign:"center",transition:"background 0.15s"}}
+                  onMouseEnter={e=>{if(!sel)e.currentTarget.style.background="var(--input-bg)";}}
+                  onMouseLeave={e=>{if(!sel)e.currentTarget.style.background="transparent";}}>
+                  {day}
+                </button>
+              );
+            })}
+          </div>
         </div>
       );
     };
@@ -1889,10 +1884,10 @@
               <FG label="Category"><EditableSelect value={form.category||cats[0]||""} onChange={v=>sf("category",v)} items={cats} onItemsChange={setCats}/></FG>
               <FG label="Priority"><CustomSelect value={form.priority||"Medium"} onChange={v=>sf("priority",v)} options={PRIS}/></FG>
               {edit&&<FG label="Status"><CustomSelect value={form.status||"Outstanding"} onChange={v=>sf("status",v)} options={STATS}/></FG>}
-              <FG label="Due Date" error={errs.due}><DatePicker value={form.due||""} onChange={v=>sf("due",v)} hasError={!!errs.due}/></FG>
-              <FG label="Scheduled Time"><ClockPicker value={form.scheduledTime||"09:00"} onChange={v=>sf("scheduledTime",v)}/></FG>
               <FG label="Assignee" error={errs.assignee}><CustomSelect value={form.assignee||assignees[0]||""} onChange={v=>sf("assignee",v)} options={assignees.map(a=>({value:a,label:a}))}/></FG>
               <FG label="Location" error={errs.location}><EditableSelect value={form.location||""} onChange={v=>sf("location",v)} items={locations} onItemsChange={setLocations} placeholder="Select or add location…"/></FG>
+              <FG label="Due Date" error={errs.due} full><DatePicker value={form.due||""} onChange={v=>sf("due",v)} hasError={!!errs.due}/></FG>
+              <FG label="Scheduled Time" full><ClockPicker value={form.scheduledTime||"09:00"} onChange={v=>sf("scheduledTime",v)}/></FG>
               <FG label="Contact Person" full><ContactSelect value={form.contact||{}} onChange={v=>sf("contact",v)} contacts={contacts} onContactsChange={setContacts} placeholder="Select or add contact…"/></FG>
               <FG label="Report Recipient Email" full><input type="email" className="ws-input" placeholder="Send completion report to…" value={form.recipientEmail||""} onChange={e=>sf("recipientEmail",e.target.value)}/></FG>
               <FG label="Notes" full><textarea className="ws-input" style={{minHeight:90,resize:"vertical"}} placeholder="Context, hazards, special instructions…" value={form.description||""} onChange={e=>sf("description",e.target.value)}/></FG>
