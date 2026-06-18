@@ -718,8 +718,7 @@
         if(!fullscreen || !fsCanvasRef.current) return;
         const canvas = fsCanvasRef.current;
         const ctx = canvas.getContext("2d");
-        ctx.fillStyle = "#f7f4ee";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
         if(value){
           const img = new Image();
           img.onload = ()=>ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
@@ -796,8 +795,7 @@
       const clearFs = () => {
         if(!fsCanvasRef.current) return;
         const ctx = fsCanvasRef.current.getContext("2d");
-        ctx.fillStyle = "#f7f4ee";
-        ctx.fillRect(0, 0, fsCanvasRef.current.width, fsCanvasRef.current.height);
+        ctx.clearRect(0, 0, fsCanvasRef.current.width, fsCanvasRef.current.height);
       };
 
       const capture = () => {
