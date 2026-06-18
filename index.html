@@ -817,8 +817,8 @@
             </div>
           </div>
 
-          {fullscreen&&(
-            <div style={{position:"fixed",inset:0,zIndex:1100,background:"rgba(20,18,16,0.97)",display:"flex",flexDirection:"column",padding:"10px 14px"}}>
+          {fullscreen&&ReactDOM.createPortal(
+            <div style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(20,18,16,0.97)",display:"flex",flexDirection:"column",padding:"10px 14px"}}>
               <div style={{flexShrink:0,display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
                 <span style={{fontFamily:"'Noto Serif JP',serif",fontSize:16,color:"#f0ebe0",fontWeight:300,letterSpacing:"0.04em"}}>Client Signature</span>
                 <button onClick={()=>setFullscreen(false)} style={{background:"none",border:"1px solid rgba(200,184,154,0.25)",cursor:"pointer",color:"#c8b89a",fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.08em",padding:"6px 14px",borderRadius:1}}>× Close</button>
@@ -837,7 +837,8 @@
                   <button onClick={capture} style={{background:"#f0ebe0",color:"#1c1a18",border:"none",cursor:"pointer",fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,letterSpacing:"0.12em",padding:"10px 20px",borderRadius:1,fontWeight:500}}>Capture Signature</button>
                 </div>
               </div>
-            </div>
+            </div>,
+            document.body
           )}
         </>
       );
