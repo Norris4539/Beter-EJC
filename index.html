@@ -961,10 +961,6 @@
                       </label>
                     )}
                   </div>
-                  <div>
-                    <div style={{...lblStyle,marginBottom:10}}>Client Signature <span style={{color:"var(--text-dim)",fontWeight:300,letterSpacing:"0.04em",textTransform:"none"}}>(optional)</span></div>
-                    <SignaturePad value={cForm.signatureDataUrl} onChange={v=>sc2("signatureDataUrl",v)}/>
-                  </div>
                 </div>
                 <BrushStroke variant={1} style={{margin:"28px 0 24px"}}/>
                 <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:24,padding:"14px 16px",background:"rgba(78,104,70,0.08)",border:"1px solid rgba(78,104,70,0.25)",borderRadius:1}}>
@@ -1046,12 +1042,6 @@
         if(report.arrivedAt&&job.completedAt){try{const[ah,am]=report.arrivedAt.split(":").map(Number);const arr=new Date(job.due);arr.setHours(ah,am,0,0);const diffMs=new Date(job.completedAt)-arr;if(diffMs>0){const tot=Math.floor(diffMs/60000);const hrs=Math.floor(tot/60),mins=tot%60;lbl("Time on Site",M,y);y+=5;val(hrs>0?`${hrs} hr ${mins} min`:`${mins} min`,M,y,CW);y+=10;}}catch(e){}}
         if(report.metWith){lbl("Met with",M,y);y+=5;const ml=val(report.metWith,M,y,CW);y+=ml*6+4;}
         if(report.clientContact){lbl("Client Contact",M,y);y+=5;const cl=val(report.clientContact,M,y,CW);y+=cl*6+6;}
-        if(report.signatureDataUrl){
-          lbl("Client Signature",M,y);y+=5;
-          doc.setDrawColor(200,184,154);doc.setLineWidth(0.3);doc.rect(M,y,62,18);
-          try{doc.addImage(report.signatureDataUrl,"PNG",M+1,y+1,60,16);}catch(e){}
-          y+=24;
-        }
         if(report.workCompleted?.length){
           lbl("Work Completed",M,y);y+=5;
           doc.setFontSize(10);doc.setTextColor(28,26,24);doc.setFont("helvetica","normal");
@@ -1167,7 +1157,7 @@
       const [showInstall,setShowInstall] = useState(false);
       const [cModal,setCModal] = useState(null);
       const [cTpl,setCTpl]    = useState(null);
-      const [cForm,setCForm]  = useState({arrivedAt:"",metWith:"",clientContact:"",workCompleted:[""],workRemaining:[""],additionalNotes:"",signatureDataUrl:null,photos:[]});
+      const [cForm,setCForm]  = useState({arrivedAt:"",metWith:"",clientContact:"",workCompleted:[""],workRemaining:[""],additionalNotes:"",photos:[]});
       const [templates,setTemplatesRaw] = useState(()=>load("jc-templates",[]));
       const setTemplates = t=>{setTemplatesRaw(t);save("jc-templates",t);};
       const [cErrs,setCErrs]  = useState({});
@@ -1289,7 +1279,7 @@
         if(status==="Completed"){
           const base=job.inProgressAt?new Date(job.inProgressAt):new Date();
           const hh=String(base.getHours()).padStart(2,"0"),mm=String(base.getMinutes()).padStart(2,"0");
-          setCForm({arrivedAt:`${hh}:${mm}`,metWith:"",clientContact:"",workCompleted:[""],workRemaining:[""],additionalNotes:"",signatureDataUrl:null,photos:[]});
+          setCForm({arrivedAt:`${hh}:${mm}`,metWith:"",clientContact:"",workCompleted:[""],workRemaining:[""],additionalNotes:"",photos:[]});
           setCErrs({}); setCTpl(null); setCModal({job});
         } else {
           const updated={...job,status,...(status==="In Progress"&&!job.inProgressAt?{inProgressAt:new Date().toISOString()}:{})};
@@ -1326,7 +1316,7 @@
         setCErrs({});
         const{job}=cModal;
         const now=new Date().toISOString();
-        const rpt=cTpl==="site-visit"?{templateType:"site-visit",arrivedAt:cForm.arrivedAt,metWith:cForm.metWith,clientContact:cForm.clientContact,workCompleted:cForm.workCompleted.filter(l=>l.trim()),workRemaining:cForm.workRemaining.filter(l=>l.trim()),additionalNotes:cForm.additionalNotes?.trim()||null,signatureDataUrl:cForm.signatureDataUrl||null}:null;
+        const rpt=cTpl==="site-visit"?{templateType:"site-visit",arrivedAt:cForm.arrivedAt,metWith:cForm.metWith,clientContact:cForm.clientContact,workCompleted:cForm.workCompleted.filter(l=>l.trim()),workRemaining:cForm.workRemaining.filter(l=>l.trim()),additionalNotes:cForm.additionalNotes?.trim()||null}:null;
         const completed={...job,status:"Completed",completedAt:now,completionReport:rpt};
         if((cForm.photos||[]).length>0) save(`jc-photos-${job.id}`,cForm.photos);
         setJobs(js=>js.map(j=>j.id===job.id?completed:j));
@@ -1885,7 +1875,6 @@
                     {r.arrivedAt&&<div><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.16em",color:"var(--text-dim)",fontWeight:500,textTransform:"uppercase",marginBottom:5}}>Arrived on site at</div><div style={{fontFamily:"'Noto Serif JP',serif",fontSize:15,color:"var(--text-pri)",fontWeight:400}}>{r.arrivedAt}</div></div>}
                     {r.metWith&&<div><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.16em",color:"var(--text-dim)",fontWeight:500,textTransform:"uppercase",marginBottom:5}}>Met with</div><div style={{fontFamily:"'Noto Serif JP',serif",fontSize:14,color:"var(--text-pri)",fontWeight:400}}>{r.metWith}</div></div>}
                     {r.clientContact&&<div><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.16em",color:"var(--text-dim)",fontWeight:500,textTransform:"uppercase",marginBottom:5}}>Client Contact</div><div style={{fontFamily:"'Noto Serif JP',serif",fontSize:14,color:"var(--text-pri)",fontWeight:400}}>{r.clientContact}</div></div>}
-                    {r.signatureDataUrl&&<div><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.16em",color:"var(--text-dim)",fontWeight:500,textTransform:"uppercase",marginBottom:8}}>Client Signature</div><img src={r.signatureDataUrl} alt="Signature" style={{height:56,maxWidth:"50%",objectFit:"contain",border:"1px solid var(--card-border)",borderRadius:2,background:"#f7f4ee",display:"block"}}/></div>}
                     {r.workCompleted&&r.workCompleted.length>0&&(<div><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.16em",color:"var(--text-dim)",fontWeight:500,textTransform:"uppercase",marginBottom:8}}>Work Completed</div><ul style={{listStyle:"none",padding:0,display:"flex",flexDirection:"column",gap:5}}>{r.workCompleted.map((it,i)=><li key={i} style={{display:"flex",gap:10,alignItems:"flex-start"}}><span style={{color:"var(--matcha)",flexShrink:0,fontSize:15,lineHeight:1.5}}>•</span><span style={{fontFamily:"'Noto Serif JP',serif",fontSize:13,color:"var(--text-pri)",fontWeight:300,lineHeight:1.7}}>{it}</span></li>)}</ul></div>)}
                     {r.workRemaining&&r.workRemaining.length>0&&(<div><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.16em",color:"var(--text-dim)",fontWeight:500,textTransform:"uppercase",marginBottom:8}}>Work Remaining</div><ul style={{listStyle:"none",padding:0,display:"flex",flexDirection:"column",gap:5}}>{r.workRemaining.map((it,i)=><li key={i} style={{display:"flex",gap:10,alignItems:"flex-start"}}><span style={{color:"var(--ki)",flexShrink:0,fontSize:15,lineHeight:1.5}}>•</span><span style={{fontFamily:"'Noto Serif JP',serif",fontSize:13,color:"var(--text-pri)",fontWeight:300,lineHeight:1.7}}>{it}</span></li>)}</ul></div>)}
                     {r.additionalNotes&&(<div><div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.16em",color:"var(--text-dim)",fontWeight:500,textTransform:"uppercase",marginBottom:5}}>Additional Notes</div><p style={{fontFamily:"'Noto Serif JP',serif",fontSize:13,color:"var(--text-pri)",fontWeight:300,lineHeight:1.8,margin:0}}>{r.additionalNotes}</p></div>)}
