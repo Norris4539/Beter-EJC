@@ -702,10 +702,15 @@
       const fsCanvasRef = useRef(null);
       const drawing = useRef(false);
 
-      // Freeze body scroll when overlay is open so the report beneath cannot scroll
+      // Freeze scroll on both <body> and <html> — mobile browsers (Android Chrome)
+      // scroll on documentElement, not body, so both must be locked
       useEffect(()=>{
-        document.body.style.overflow = fullscreen ? "hidden" : "";
-        return()=>{ document.body.style.overflow = ""; };
+        document.body.style.overflow           = fullscreen ? "hidden" : "";
+        document.documentElement.style.overflow = fullscreen ? "hidden" : "";
+        return()=>{
+          document.body.style.overflow           = "";
+          document.documentElement.style.overflow = "";
+        };
       }, [fullscreen]);
 
       // Fill canvas background and restore any existing signature when overlay opens
