@@ -1043,7 +1043,7 @@
         if(report.arrivedAt&&job.completedAt){try{const[ah,am]=report.arrivedAt.split(":").map(Number);const arr=new Date(job.due);arr.setHours(ah,am,0,0);const diffMs=new Date(job.completedAt)-arr;if(diffMs>0){const tot=Math.floor(diffMs/60000);const hrs=Math.floor(tot/60),mins=tot%60;lbl("Time on Site",M,y);y+=5;val(hrs>0?`${hrs} hr ${mins} min`:`${mins} min`,M,y,CW);y+=10;}}catch(e){}}
         if(report.metWith){lbl("Met with",M,y);y+=5;const ml=val(report.metWith,M,y,CW);y+=ml*6+4;}
         if(report.clientContact){lbl("Client Contact",M,y);y+=5;const cl=val(report.clientContact,M,y,CW);y+=cl*6+6;}
-        if(report.signatureDataUrl){lbl("Client Signature",M,y);y+=5;doc.setDrawColor(200,184,154);doc.setLineWidth(0.3);doc.rect(M,y,62,18);try{doc.addImage(report.signatureDataUrl,"PNG",M+1,y+1,60,16);}catch(e){}y+=24;}
+        if(report.signatureDataUrl){lbl("Client Signature",M,y);y+=5;try{doc.addImage(report.signatureDataUrl,"PNG",M,y,62,18);}catch(e){}doc.setDrawColor(200,184,154);doc.setLineWidth(0.4);doc.line(M,y+18,M+62,y+18);y+=24;}
         if(report.workCompleted?.length){
           lbl("Work Completed",M,y);y+=5;
           doc.setFontSize(10);doc.setTextColor(28,26,24);doc.setFont("helvetica","normal");
