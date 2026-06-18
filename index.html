@@ -800,7 +800,15 @@
 
       const capture = () => {
         if(!fsCanvasRef.current) return;
-        onChange(fsCanvasRef.current.toDataURL("image/png"));
+        const canvas = fsCanvasRef.current;
+        const ctx = canvas.getContext("2d");
+        const id = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const d = id.data;
+        for(let i = 0; i < d.length; i += 4){
+          if(d[i] > 200 && d[i+1] > 195 && d[i+2] > 185) d[i+3] = 0;
+        }
+        ctx.putImageData(id, 0, 0);
+        onChange(canvas.toDataURL("image/png"));
         setFullscreen(false);
       };
 
