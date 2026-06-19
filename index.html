@@ -45,7 +45,7 @@
           } else {
             e.respondWith(caches.match(e.request).then(c=>{
               if(c)return c;
-              return fetch(e.request).then(r=>{const cl=r.clone();caches.open(CACHE).then(ca=>ca.put(e.request,cl));return r;});
+              return fetch(e.request).then(r=>{if(r.ok){const cl=r.clone();caches.open(CACHE).then(ca=>ca.put(e.request,cl));}return r;});
             }));
           }
         });
@@ -216,6 +216,8 @@
         .photo-lightbox img{max-width:100%;max-height:100%;object-fit:contain;border-radius:2px;}
         .user-admin-row{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--card-border);}
         .user-admin-row:last-child{border-bottom:none;}
+        .hov-danger{transition:color 0.15s;}.hov-danger:hover{color:var(--aka)!important;}
+        .hov-pri{transition:color 0.15s;}.hov-pri:hover{color:var(--text-pri)!important;}
         @media(max-width:600px){
           .rpt-bar-label{width:80px;}
           .tab-btn{padding:10px 12px;font-size:9px;}
@@ -224,9 +226,12 @@
     );
 
     /* ── SVG decoratives ─────────────────────────────────────────────────── */
-    const BrushStroke = ({ style={}, variant=0 }) => (
-      <div style={{height:2,background:"var(--card-border)",width:"100%",...style}}/>
-    );
+    const BrushStroke = ({ style={}, variant=0 }) => {
+      const base={width:"100%",...style};
+      if(variant===1) return <div style={{height:1,background:"var(--card-border)",opacity:0.5,...base}}/>;
+      if(variant===2) return <div style={{height:1,backgroundImage:"repeating-linear-gradient(90deg,var(--card-border) 0,var(--card-border) 4px,transparent 4px,transparent 8px)",...base}}/>;
+      return <div style={{height:2,background:"var(--card-border)",...base}}/>;
+    };
 
     const InkBlot = ({ size=28, opacity=0.06, style={} }) => (
       <svg viewBox="0 0 60 60" style={{width:size,height:size,...style}}>
@@ -273,22 +278,22 @@
     ];
 
     const load = (key, def) => { try { const s=localStorage.getItem(key); return s?JSON.parse(s):def; } catch { return def; } };
-    const save = (key, val) => { try { localStorage.setItem(key,JSON.stringify(val)); } catch {} };
-    const isPWA = () => window.matchMedia('(display-mode: standalone)').matches || !!window.navigator.standalone;
-    const SESSION_KEY = isPWA() ? "jc-pwa-session" : "jc-session";
+    const save = (key, val) => { try { localStorage.setItem(key,JSON.stringify(val)); return true; } catch { return false; } };
+    const SESSION_KEY = "jc-session";
     const today   = () => new Date().toISOString().slice(0,10);
-    const fmtDate = d  => new Date(d).toLocaleDateString("en-GB",{year:"numeric",month:"2-digit",day:"2-digit"});
-    const overdue = (due,st) => st!=="Completed" && new Date(due)<new Date();
-    const hashPw  = async (pw,em) => {
+    const fmtDate = d  => new Date(d+"T00:00:00").toLocaleDateString("en-GB",{year:"numeric",month:"2-digit",day:"2-digit"});
+    const overdue = (due,st) => st!=="Completed" && new Date(due+"T00:00:00")<new Date();
+    const genSalt = () => Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b=>b.toString(16).padStart(2,"0")).join("");
+    const hashPw  = async (pw, salt) => {
       try {
-        const d=new TextEncoder().encode(pw+"|"+em.toLowerCase());
+        const d=new TextEncoder().encode(pw+"|"+salt);
         const h=await crypto.subtle.digest("SHA-256",d);
         return Array.from(new Uint8Array(h)).map(b=>b.toString(16).padStart(2,"0")).join("");
-      } catch { return btoa(pw+"|"+em.toLowerCase()); }
+      } catch { return btoa(pw+"|"+salt); }
     };
 
     /* ── Shared UI ───────────────────────────────────────────────────────── */
-    const FL = ({c}) => <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.16em",color:"var(--text-sec)",fontWeight:500,textTransform:"uppercase",marginBottom:7}}>{c}</div>;
+    const FL = ({c, htmlFor}) => <label htmlFor={htmlFor} style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.16em",color:"var(--text-sec)",fontWeight:500,textTransform:"uppercase",marginBottom:7,display:"block",cursor:htmlFor?"pointer":undefined}}>{c}</label>;
     const SL = ({children,s=0}) => (
       <div style={{marginBottom:18}}>
         <div style={{display:"flex",alignItems:"baseline",gap:12,marginBottom:8}}>
@@ -324,24 +329,29 @@
       );
     };
 
-    const FG = ({label,error,children,full=false}) => (
+    const FG = ({label,error,children,full=false,id}) => (
       <div style={{gridColumn:full?"1/-1":undefined}}>
-        <FL c={label}/>
-        {children}
+        <FL c={label} htmlFor={id}/>
+        {React.Children.map(children,child=>child&&id?React.cloneElement(child,{id}):child)}
         {error&&<div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,color:"var(--aka)",marginTop:5}}>* {error}</div>}
       </div>
     );
+
+    /* ── Shared hook for click-outside dismissal ─────────────────────────── */
+    const useClickOutside = (ref, onClose, active) => {
+      useEffect(()=>{
+        if(!active)return;
+        const h=e=>{if(ref.current&&!ref.current.contains(e.target))onClose();};
+        document.addEventListener("mousedown",h); document.addEventListener("touchstart",h);
+        return()=>{document.removeEventListener("mousedown",h);document.removeEventListener("touchstart",h);};
+      },[active]);
+    };
 
     /* ── Stable components (outside App so input focus survives re-renders) ── */
     const CustomSelect = ({value, onChange, options, style}) => {
       const [open, setOpen] = useState(false);
       const ref = useRef(null);
-      useEffect(()=>{
-        if(!open)return;
-        const h=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);};
-        document.addEventListener("mousedown",h); document.addEventListener("touchstart",h);
-        return()=>{document.removeEventListener("mousedown",h);document.removeEventListener("touchstart",h);};
-      },[open]);
+      useClickOutside(ref, ()=>setOpen(false), open);
       const opts=options.map(o=>typeof o==="string"?{value:o,label:o}:o);
       const sel=opts.find(o=>o.value===value)||opts[0];
       return (
@@ -371,12 +381,7 @@
       const [editIdx,setEditIdx] = useState(-1);
       const [editVal,setEditVal] = useState("");
       const ref = useRef(null);
-      useEffect(()=>{
-        if(!open)return;
-        const h=e=>{if(ref.current&&!ref.current.contains(e.target)){setOpen(false);setAdding(false);setEditIdx(-1);}};
-        document.addEventListener("mousedown",h);document.addEventListener("touchstart",h);
-        return()=>{document.removeEventListener("mousedown",h);document.removeEventListener("touchstart",h);};
-      },[open]);
+      useClickOutside(ref, ()=>{setOpen(false);setAdding(false);setEditIdx(-1);}, open);
       const select=(item)=>{onChange(item);setOpen(false);setAdding(false);setEditIdx(-1);};
       const addItem=()=>{const v=newItem.trim();if(!v)return;const next=[...items,v];onItemsChange(next);onChange(v);setNewItem("");setAdding(false);setOpen(false);};
       const deleteItem=(e,idx)=>{e.stopPropagation();const next=items.filter((_,i)=>i!==idx);onItemsChange(next);if(items[idx]===value)onChange(next[0]||"");};
@@ -438,12 +443,7 @@
       const [editId,setEditId]= useState(null);
       const [editC,setEditC]  = useState({});
       const ref = useRef(null);
-      useEffect(()=>{
-        if(!open)return;
-        const h=e=>{if(ref.current&&!ref.current.contains(e.target)){setOpen(false);setAdding(false);setEditId(null);}};
-        document.addEventListener("mousedown",h);document.addEventListener("touchstart",h);
-        return()=>{document.removeEventListener("mousedown",h);document.removeEventListener("touchstart",h);};
-      },[open]);
+      useClickOutside(ref, ()=>{setOpen(false);setAdding(false);setEditId(null);}, open);
       const select=c=>{onChange({name:c.name,phone:c.phone||"",email:c.email||""});setOpen(false);};
       const addContact=()=>{
         if(!newC.name.trim())return;
@@ -531,6 +531,7 @@
       const submit = async () => {
         if(!email.trim()||!pw.trim()){setErr("All fields are required");return;}
         if(mode==="register"&&!name.trim()){setErr("Name is required");return;}
+        if(mode==="register"&&pw.length<8){setErr("Password must be at least 8 characters");return;}
         setBusy(true); setErr("");
         const e=mode==="login"?await onSignIn(email.trim(),pw):await onRegister(email.trim(),name.trim(),pw);
         setBusy(false); if(e)setErr(e);
@@ -689,10 +690,10 @@
             <div key={i} style={{display:"flex",alignItems:"center",gap:8}}>
               <span style={{color:"var(--text-dim)",fontSize:16,flexShrink:0,lineHeight:1}}>•</span>
               <input className="ws-input" style={{flex:1,padding:"8px 12px",fontSize:13}} placeholder={ph} value={ln} onChange={e=>upd(i,e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();add(i);}if(e.key==="Backspace"&&ln===""){e.preventDefault();rm(i);}}}/>
-              <button onClick={()=>rm(i)} style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-dim)",fontSize:16,padding:"0 4px",flexShrink:0}} onMouseEnter={e=>e.currentTarget.style.color="var(--aka)"} onMouseLeave={e=>e.currentTarget.style.color="var(--text-dim)"}>×</button>
+              <button onClick={()=>rm(i)} className="hov-danger" style={{background:"none",border:"none",cursor:"pointer",color:"var(--text-dim)",fontSize:16,padding:"0 4px",flexShrink:0}}>×</button>
             </div>
           ))}
-          <button onClick={()=>add(items.length-1)} style={{alignSelf:"flex-start",background:"none",border:"none",cursor:"pointer",color:"var(--text-sec)",fontSize:11,fontFamily:"'Noto Sans JP',sans-serif",letterSpacing:"0.1em",padding:"4px 0"}} onMouseEnter={e=>e.currentTarget.style.color="var(--text-pri)"} onMouseLeave={e=>e.currentTarget.style.color="var(--text-sec)"}>+ add item</button>
+          <button onClick={()=>add(items.length-1)} className="hov-pri" style={{alignSelf:"flex-start",background:"none",border:"none",cursor:"pointer",color:"var(--text-sec)",fontSize:11,fontFamily:"'Noto Sans JP',sans-serif",letterSpacing:"0.1em",padding:"4px 0"}}>+ add item</button>
         </div>
       );
     };
@@ -814,7 +815,7 @@
 
       return (
         <>
-          <div style={{border:"1px solid var(--card-border)",borderRadius:2,background:"#f7f4ee",position:"relative",overflow:"hidden",minHeight:56}}>
+          <div style={{border:"1px solid var(--card-border)",borderRadius:2,background:"var(--card-bg)",position:"relative",overflow:"hidden",minHeight:56}}>
             {value ? (
               <img src={value} alt="Signature" style={{width:"100%",height:56,objectFit:"contain",display:"block"}}/>
             ) : (
@@ -823,29 +824,29 @@
               </div>
             )}
             <div style={{position:"absolute",bottom:6,right:6,display:"flex",gap:6}}>
-              {value&&<button onClick={()=>onChange(null)} style={{background:"none",border:"none",cursor:"pointer",fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,color:"var(--nori)",letterSpacing:"0.08em",padding:"4px 6px"}} onMouseEnter={e=>e.currentTarget.style.color="var(--aka)"} onMouseLeave={e=>e.currentTarget.style.color="var(--nori)"}>Clear</button>}
+              {value&&<button onClick={()=>onChange(null)} className="hov-danger" style={{background:"none",border:"none",cursor:"pointer",fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,color:"var(--nori)",letterSpacing:"0.08em",padding:"4px 6px"}}>Clear</button>}
               <button onClick={()=>setFullscreen(true)} style={{background:"var(--sumi)",color:"var(--washi)",border:"none",cursor:"pointer",fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.1em",padding:"5px 10px",borderRadius:1}}>{value?"Re-sign ↗":"Sign ↗"}</button>
             </div>
           </div>
 
           {fullscreen&&ReactDOM.createPortal(
-            <div style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(20,18,16,0.97)",display:"flex",flexDirection:"column",padding:"10px 14px"}}>
+            <div style={{position:"fixed",inset:0,zIndex:9999,background:"var(--modal-bg)",backdropFilter:"blur(4px)",display:"flex",flexDirection:"column",padding:"10px 14px"}}>
               <div style={{flexShrink:0,display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                <span style={{fontFamily:"'Noto Serif JP',serif",fontSize:16,color:"#f0ebe0",fontWeight:300,letterSpacing:"0.04em"}}>Client Signature</span>
-                <button onClick={()=>setFullscreen(false)} style={{background:"none",border:"1px solid rgba(200,184,154,0.25)",cursor:"pointer",color:"#c8b89a",fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.08em",padding:"6px 14px",borderRadius:1}}>× Close</button>
+                <span style={{fontFamily:"'Noto Serif JP',serif",fontSize:16,color:"var(--text-pri)",fontWeight:300,letterSpacing:"0.04em"}}>Client Signature</span>
+                <button onClick={()=>setFullscreen(false)} style={{background:"none",border:"1px solid var(--card-border)",cursor:"pointer",color:"var(--text-sec)",fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.08em",padding:"6px 14px",borderRadius:1}}>× Close</button>
               </div>
               <canvas
                 ref={fsCanvasRef}
                 width={1080}
                 height={1920}
-                style={{flex:1,minHeight:0,width:"100%",background:"#f7f4ee",borderRadius:2,cursor:"crosshair",touchAction:"none",display:"block"}}
+                style={{flex:1,minHeight:0,width:"100%",background:"var(--input-bg)",borderRadius:2,cursor:"crosshair",touchAction:"none",display:"block"}}
                 onMouseDown={mouseDown} onMouseMove={mouseMove} onMouseUp={mouseUp} onMouseLeave={mouseUp}
               />
               <div style={{flexShrink:0,display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:8}}>
-                <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,color:"rgba(200,184,154,0.45)",letterSpacing:"0.1em"}}>Sign with finger or stylus</span>
+                <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,color:"var(--text-dim)",letterSpacing:"0.1em"}}>Sign with finger or stylus</span>
                 <div style={{display:"flex",gap:10}}>
-                  <button onClick={clearFs} style={{background:"none",border:"1px solid rgba(200,184,154,0.3)",cursor:"pointer",color:"#c8b89a",fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,letterSpacing:"0.1em",padding:"10px 20px",borderRadius:1}}>Clear</button>
-                  <button onClick={capture} style={{background:"#f0ebe0",color:"#1c1a18",border:"none",cursor:"pointer",fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,letterSpacing:"0.12em",padding:"10px 20px",borderRadius:1,fontWeight:500}}>Capture Signature</button>
+                  <button onClick={clearFs} className="ws-btn-ghost" style={{fontSize:11,letterSpacing:"0.1em",padding:"10px 20px"}}>Clear</button>
+                  <button onClick={capture} className="ws-btn-primary" style={{fontSize:11,letterSpacing:"0.12em",padding:"10px 20px"}}>Capture Signature</button>
                 </div>
               </div>
             </div>,
@@ -983,7 +984,7 @@
                   </div>
                 ) : (
                   <div style={{marginBottom:16}}>
-                    <button onClick={()=>setSavingTpl(true)} style={{background:"none",border:"none",cursor:"pointer",fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,color:"var(--text-sec)",letterSpacing:"0.1em",padding:"4px 0",textDecoration:"underline",textUnderlineOffset:"3px"}} onMouseEnter={e=>e.currentTarget.style.color="var(--text-pri)"} onMouseLeave={e=>e.currentTarget.style.color="var(--text-sec)"}>Save current form as template</button>
+                    <button onClick={()=>setSavingTpl(true)} className="hov-pri" style={{background:"none",border:"none",cursor:"pointer",fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,color:"var(--text-sec)",letterSpacing:"0.1em",padding:"4px 0",textDecoration:"underline",textUnderlineOffset:"3px"}}>Save current form as template</button>
                   </div>
                 )}
                 <div style={{display:"flex",justifyContent:"flex-end",gap:10}}>
@@ -1018,7 +1019,9 @@
       const W=210,M=20,CW=W-M*2;
       let y=22;
 
-      const rule=()=>{doc.setDrawColor(200,184,154);doc.setLineWidth(0.3);doc.line(M,y,W-M,y);y+=8;};
+      const PAGE_H=297,MARGIN_B=20;
+      const checkPage=(needed=10)=>{if(y+needed>PAGE_H-MARGIN_B){doc.addPage();y=20;}};
+      const rule=()=>{checkPage(16);doc.setDrawColor(200,184,154);doc.setLineWidth(0.3);doc.line(M,y,W-M,y);y+=8;};
       const lbl=(t,x,yy)=>{doc.setFontSize(7);doc.setTextColor(150,130,100);doc.setFont("helvetica","bold");doc.text(t.toUpperCase(),x,yy);};
       const val=(t,x,yy,w)=>{doc.setFontSize(11);doc.setTextColor(28,26,24);doc.setFont("helvetica","normal");const ls=doc.splitTextToSize(String(t||"—"),w);doc.text(ls,x,yy);return ls.length;};
 
@@ -1045,25 +1048,25 @@
       if(report){
         doc.setFontSize(11);doc.setTextColor(78,104,70);doc.setFont("helvetica","bold");
         doc.text("SITE VISIT REPORT",M,y); y+=10;
-        if(report.arrivedAt){lbl("Arrived on site at",M,y);y+=5;val(report.arrivedAt,M,y,CW);y+=10;}
-        if(report.arrivedAt&&job.completedAt){try{const[ah,am]=report.arrivedAt.split(":").map(Number);const arr=new Date(job.due);arr.setHours(ah,am,0,0);const diffMs=new Date(job.completedAt)-arr;if(diffMs>0){const tot=Math.floor(diffMs/60000);const hrs=Math.floor(tot/60),mins=tot%60;lbl("Time on Site",M,y);y+=5;val(hrs>0?`${hrs} hr ${mins} min`:`${mins} min`,M,y,CW);y+=10;}}catch(e){}}
-        if(report.metWith){lbl("Met with",M,y);y+=5;const ml=val(report.metWith,M,y,CW);y+=ml*6+4;}
-        if(report.clientContact){lbl("Client Contact",M,y);y+=5;const cl=val(report.clientContact,M,y,CW);y+=cl*6+6;}
-        if(report.signatureDataUrl){lbl("Client Signature",M,y);y+=5;try{doc.addImage(report.signatureDataUrl,"PNG",M,y,62,18);}catch(e){}doc.setDrawColor(200,184,154);doc.setLineWidth(0.4);doc.line(M,y+18,M+62,y+18);y+=24;}
+        if(report.arrivedAt){checkPage(20);lbl("Arrived on site at",M,y);y+=5;val(report.arrivedAt,M,y,CW);y+=10;}
+        if(report.arrivedAt&&job.completedAt){try{const[ah,am]=report.arrivedAt.split(":").map(Number);const arr=new Date(job.due);arr.setHours(ah,am,0,0);const diffMs=new Date(job.completedAt)-arr;if(diffMs>0){const tot=Math.floor(diffMs/60000);const hrs=Math.floor(tot/60),mins=tot%60;checkPage(20);lbl("Time on Site",M,y);y+=5;val(hrs>0?`${hrs} hr ${mins} min`:`${mins} min`,M,y,CW);y+=10;}}catch(e){}}
+        if(report.metWith){checkPage(20);lbl("Met with",M,y);y+=5;const ml=val(report.metWith,M,y,CW);y+=ml*6+4;}
+        if(report.clientContact){checkPage(20);lbl("Client Contact",M,y);y+=5;const cl=val(report.clientContact,M,y,CW);y+=cl*6+6;}
+        if(report.signatureDataUrl){checkPage(34);lbl("Client Signature",M,y);y+=5;try{doc.addImage(report.signatureDataUrl,"PNG",M,y,62,18);}catch(e){}doc.setDrawColor(200,184,154);doc.setLineWidth(0.4);doc.line(M,y+18,M+62,y+18);y+=24;}
         if(report.workCompleted?.length){
-          lbl("Work Completed",M,y);y+=5;
+          checkPage(20);lbl("Work Completed",M,y);y+=5;
           doc.setFontSize(10);doc.setTextColor(28,26,24);doc.setFont("helvetica","normal");
-          report.workCompleted.forEach(item=>{const ls=doc.splitTextToSize(`• ${item}`,CW-4);doc.text(ls,M+2,y);y+=ls.length*5+2;});
+          report.workCompleted.forEach(item=>{const ls=doc.splitTextToSize(`• ${item}`,CW-4);checkPage(ls.length*5+4);doc.text(ls,M+2,y);y+=ls.length*5+2;});
           y+=4;
         }
         if(report.workRemaining?.length){
-          lbl("Work Remaining",M,y);y+=5;
+          checkPage(20);lbl("Work Remaining",M,y);y+=5;
           doc.setFontSize(10);doc.setTextColor(28,26,24);doc.setFont("helvetica","normal");
-          report.workRemaining.forEach(item=>{const ls=doc.splitTextToSize(`• ${item}`,CW-4);doc.text(ls,M+2,y);y+=ls.length*5+2;});
+          report.workRemaining.forEach(item=>{const ls=doc.splitTextToSize(`• ${item}`,CW-4);checkPage(ls.length*5+4);doc.text(ls,M+2,y);y+=ls.length*5+2;});
           y+=4;
         }
         if(report.additionalNotes){
-          lbl("Additional Notes",M,y);y+=5;
+          checkPage(20);lbl("Additional Notes",M,y);y+=5;
           const nl=val(report.additionalNotes,M,y,CW);y+=nl*6+8;
         }
       } else {
@@ -1104,7 +1107,7 @@
     const HistRow = ({job, total, idx, onPhotoClick}) => {
       const [expanded, setExpanded] = useState(false);
       const sc = SC[job.status];
-      const photos = load(`jc-photos-${job.id}`, []);
+      const [photos] = useState(() => load(`jc-photos-${job.id}`, []));
       return (
         <div>
           <div className="hist-row" style={{padding:"14px 20px",borderBottom:idx<total-1?"1px solid var(--card-border)":"none",display:"flex",alignItems:"flex-start",gap:14}} onClick={()=>setExpanded(e=>!e)}>
@@ -1139,6 +1142,137 @@
                   </div>
                 </div>
               )}
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    /* ── Hoisted sub-components (stable identity across App re-renders) ─── */
+    const ModeToggle = ({dark, setDark}) => (
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <div className="ws-toggle-track" onClick={()=>setDark(d=>!d)} role="switch" aria-checked={dark} tabIndex={0} onKeyDown={e=>e.key===" "&&setDark(d=>!d)}>
+          <div className={`ws-toggle-knob${dark?" on":""}`}/>
+        </div>
+        <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase"}}>{dark?"Dark":"Light"}</span>
+      </div>
+    );
+
+    const TabNav = ({tab, setTab, setView}) => (
+      <div className="tab-bar">
+        <button className={`tab-btn${tab==="list"?" active":""}`} onClick={()=>{setTab("list");setView("home");}}>LIST</button>
+        <button className={`tab-btn${tab==="calendar"?" active":""}`} onClick={()=>setTab("calendar")}>CALENDAR</button>
+        <button className={`tab-btn${tab==="reports"?" active":""}`} onClick={()=>setTab("reports")}>REPORTS</button>
+        <button className={`tab-btn${tab==="settings"?" active":""}`} onClick={()=>setTab("settings")}>ACCOUNT</button>
+      </div>
+    );
+
+    const CalEventEl = ({job, evTop, aColor, calMode, evH, setSelId, setTab, setView, hideAssigneeName=false}) => {
+      const sc=SC[job.status];
+      return(
+        <div className="cal-event" style={{top:evTop(job),height:evH,background:sc.bg,border:`1px solid ${sc.border}`,color:sc.color,...(calMode==="team"?{borderLeft:`3px solid ${aColor(job.assignee)}`}:{})}}
+          onClick={e=>{e.stopPropagation();setSelId(job.id);setTab("list");setView("detail");}}>
+          <div className="cal-event-title">
+            {calMode==="team"&&!hideAssigneeName&&<span style={{color:aColor(job.assignee),fontWeight:700,marginRight:3,fontSize:8}}>{job.assignee.split(" ")[0]}</span>}
+            {job.scheduledTime&&<span style={{opacity:0.7,marginRight:4}}>{job.scheduledTime}</span>}
+            {job.title}
+          </div>
+          {evH>=28&&<div className="cal-event-sub">{job.location}</div>}
+        </div>
+      );
+    };
+
+    const CalendarView = ({calView,setCalView,calDate,setCalDate,calMode,calScrollRef,calJobs,assignees,teamAssignees,isToday,ds,wkDays,CAL_HS,CAL_HE,CAL_SH,CAL_HOURS,CAL_EVT,setSelId,setTab,setView,openCalAdd}) => {
+      const calDateObj=new Date(calDate);
+      const days=calView==="week"?wkDays(calDateObj):[calDateObj];
+      const cols=days.length;
+      const now=new Date();
+      const nowPx=(now.getHours()*60+now.getMinutes()-CAL_HS*60)*(CAL_SH/60);
+      const showNow=now.getHours()>=CAL_HS&&now.getHours()<CAL_HE;
+      const DAY_ABB=["MON","TUE","WED","THU","FRI","SAT","SUN"];
+      const pLabel=calView==="day"
+        ?calDateObj.toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"})
+        :(()=>{const dd=wkDays(calDateObj);const f=dd[0],l=dd[6];const ma=f.toLocaleDateString("en-GB",{month:"short"}),mb=l.toLocaleDateString("en-GB",{month:"short"});return ma===mb?`${ma} ${f.getDate()}–${l.getDate()}, ${f.getFullYear()}`:`${ma} ${f.getDate()} – ${mb} ${l.getDate()}, ${f.getFullYear()}`;})();
+      const go=n=>{const d=new Date(calDate);d.setDate(d.getDate()+n*(calView==="week"?7:1));setCalDate(d.getTime());};
+      const ASGN_COLORS=["#374a6a","#4e6846","#8b7228","#8b3a2a","#7a6e5e"];
+      const aColor=name=>ASGN_COLORS[Math.max(0,assignees.indexOf(name))%ASGN_COLORS.length];
+      const evH=52;
+      const evTop=job=>{if(job.scheduledTime){const[h,m]=job.scheduledTime.split(":").map(Number);return(h+m/60-CAL_HS)*CAL_SH;}return CAL_EVT;};
+      const activeCols=calMode==="team"?(teamAssignees.length>0?teamAssignees:assignees.filter(a=>a!=="Unassigned")):null;
+      const elProps={evTop,aColor,calMode,evH,setSelId,setTab,setView};
+      return (
+        <div className="cal-wrap">
+          <div className="cal-toolbar">
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",flexWrap:"wrap",gap:12}}>
+              <div className="cal-nav">
+                <button className="cal-nav-btn" onClick={()=>go(-1)}>‹ Prev</button>
+                <button className="cal-nav-btn" onClick={()=>setCalDate(new Date().getTime())}>Today</button>
+                <button className="cal-nav-btn" onClick={()=>go(1)}>Next ›</button>
+              </div>
+              <span className="cal-period">{pLabel}</span>
+              <div className="cal-view-toggle">
+                <button className={`cal-view-btn${calView==="week"?" active":""}`} onClick={()=>setCalView("week")}>WEEK</button>
+                <button className={`cal-view-btn${calView==="day"?" active":""}`} onClick={()=>setCalView("day")}>DAY</button>
+              </div>
+            </div>
+          </div>
+          {calMode==="team"&&calView==="day"&&activeCols&&activeCols.length>0?(
+            <div className="cal-grid-outer">
+              <div style={{display:"grid",gridTemplateColumns:`44px repeat(${activeCols.length},1fr)`,borderBottom:"1px solid var(--card-border)"}}>
+                <div/>
+                {activeCols.map(a=>(
+                  <div key={a} className="cal-day-hdr">
+                    <span className="cal-day-name">{a.split(" ")[0].toUpperCase()}</span>
+                    <span style={{width:8,height:8,borderRadius:"50%",background:aColor(a),display:"inline-block",marginTop:2}}/>
+                  </div>
+                ))}
+              </div>
+              <div className="cal-scroll" ref={calScrollRef}>
+                <div style={{display:"flex"}}>
+                  <div style={{width:44,flexShrink:0}}>
+                    {CAL_HOURS.map(h=><div key={h} className="cal-time-cell"><span className="cal-time-lbl">{h}:00</span></div>)}
+                  </div>
+                  {activeCols.map((aName,ci)=>{
+                    const assigneeJobs=calJobs.filter(j=>j.assignee===aName&&j.due===ds(calDate));
+                    return(
+                      <div key={ci} style={{flex:1,position:"relative",borderLeft:"1px solid var(--card-border)"}}>
+                        {CAL_HOURS.map(h=><div key={h} className="cal-slot" onClick={()=>openCalAdd(calDate,h,aName)}><div className="cal-slot-half"/></div>)}
+                        {assigneeJobs.map(job=><CalEventEl key={job.id} job={job} {...elProps} hideAssigneeName={true}/>)}
+                        {isToday(calDate)&&showNow&&<div className="cal-now-line" style={{top:nowPx}}><div className="cal-now-dot"/></div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          ):(
+            <div className="cal-grid-outer">
+              <div style={{display:"grid",gridTemplateColumns:`44px repeat(${cols},1fr)`,borderBottom:"1px solid var(--card-border)"}}>
+                <div/>
+                {days.map((d,i)=>(
+                  <div key={i} className={`cal-day-hdr${isToday(d)?" today":""}`}>
+                    <span className="cal-day-name">{calView==="week"?DAY_ABB[i]:d.toLocaleDateString("en-GB",{weekday:"short"}).toUpperCase()}</span>
+                    <span className={`cal-day-num${isToday(d)?" today-num":""}`}>{d.getDate()}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="cal-scroll" ref={calScrollRef}>
+                <div style={{display:"flex"}}>
+                  <div style={{width:44,flexShrink:0}}>
+                    {CAL_HOURS.map(h=><div key={h} className="cal-time-cell"><span className="cal-time-lbl">{h}:00</span></div>)}
+                  </div>
+                  {days.map((d,di)=>{
+                    const dStr=ds(d); const dayJobs=calJobs.filter(j=>j.due===dStr);
+                    return(
+                      <div key={di} style={{flex:1,position:"relative",borderLeft:"1px solid var(--card-border)"}}>
+                        {CAL_HOURS.map(h=><div key={h} className="cal-slot" onClick={()=>openCalAdd(d,h)}><div className="cal-slot-half"/></div>)}
+                        {dayJobs.map(job=><CalEventEl key={job.id} job={job} {...elProps}/>)}
+                        {isToday(d)&&showNow&&<div className="cal-now-line" style={{top:nowPx}}><div className="cal-now-dot"/></div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -1185,12 +1319,12 @@
       const [contacts,setContactsRaw] = useState(()=>load("jc-contacts",[]));
       const setContacts = v=>{setContactsRaw(v);save("jc-contacts",v);};
       const EMAIL_CFG_DEF={endpointUrl:"",senderName:"",provider:"Gmail",host:"smtp.gmail.com",port:"587",secure:false,smtpUser:"",smtpPass:""};
-      const [emailCfg,setEmailCfgRaw] = useState(()=>load("jc-email-config",EMAIL_CFG_DEF));
-      const setEmailCfg = c=>{setEmailCfgRaw(c);save("jc-email-config",c);};
       const [eCfg,setECfg] = useState(()=>({...EMAIL_CFG_DEF,...load("jc-email-config",{})}));
+      const emailCfg = load("jc-email-config", EMAIL_CFG_DEF);
+      const saveEmailCfg = c=>{setECfg(c);save("jc-email-config",c);};
       const [tab,setTab]         = useState("list");
       const [calView,setCalView] = useState("week");
-      const [calDate,setCalDate] = useState(()=>new Date());
+      const [calDate,setCalDate] = useState(()=>new Date().getTime());
       const calScrollRef         = useRef(null);
       const [calMode,setCalMode]                     = useState("individual");
       const [teamAssignees,setTeamAssignees]         = useState(()=>load("jc-assignees",SEED_ASSIGNEES).filter(a=>a!=="Unassigned").slice(0,4));
@@ -1239,10 +1373,12 @@
       const notify=(msg,type="ok")=>setToast({msg,type});
       const selJob=jobs.find(j=>j.id===selId)||null;
 
-      const list=jobs
-        .filter(j=>fSt==="All"||j.status===fSt)
-        .filter(j=>fPr==="All"||j.priority===fPr)
-        .filter(j=>{ if(!srch)return true; const q=srch.toLowerCase(); return j.title.toLowerCase().includes(q)||j.assignee.toLowerCase().includes(q)||j.category.toLowerCase().includes(q); })
+      const filterJobs=(arr,st,pr,q)=>arr
+        .filter(j=>st==="All"||j.status===st)
+        .filter(j=>pr==="All"||j.priority===pr)
+        .filter(j=>{if(!q)return true;const lq=q.toLowerCase();return j.title.toLowerCase().includes(lq)||j.assignee.toLowerCase().includes(lq)||j.category.toLowerCase().includes(lq);});
+
+      const list=filterJobs(jobs,fSt,fPr,srch)
         .sort((a,b)=>{
           if(sort==="due")return new Date(a.due)-new Date(b.due);
           if(sort==="oldest")return new Date(a.created)-new Date(b.created);
@@ -1251,7 +1387,7 @@
 
       const cnts={Outstanding:jobs.filter(j=>j.status==="Outstanding").length,"In Progress":jobs.filter(j=>j.status==="In Progress").length,"On Hold":jobs.filter(j=>j.status==="On Hold").length};
 
-      const calJobs=jobs.filter(j=>fSt==="All"||j.status===fSt).filter(j=>fPr==="All"||j.priority===fPr).filter(j=>{if(!srch)return true;const q=srch.toLowerCase();return j.title.toLowerCase().includes(q)||j.assignee.toLowerCase().includes(q)||j.category.toLowerCase().includes(q);}).filter(j=>{if(calMode==="individual"&&calAssigneeFilter!=="All")return j.assignee===calAssigneeFilter;if(calMode==="team")return teamAssignees.includes(j.assignee);return true;});
+      const calJobs=filterJobs(jobs,fSt,fPr,srch).filter(j=>{if(calMode==="individual"&&calAssigneeFilter!=="All")return j.assignee===calAssigneeFilter;if(calMode==="team")return teamAssignees.includes(j.assignee);return true;});
       const ds=d=>{const dt=new Date(d);return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;};
       const wkStart=d=>{const dt=new Date(d);const day=dt.getDay();dt.setDate(dt.getDate()+(day===0?-6:1-day));return dt;};
       const wkDays=d=>Array.from({length:7},(_,i)=>{const dt=new Date(wkStart(d));dt.setDate(dt.getDate()+i);return dt;});
@@ -1326,11 +1462,10 @@
         const now=new Date().toISOString();
         const rpt=cTpl==="site-visit"?{templateType:"site-visit",arrivedAt:cForm.arrivedAt,metWith:cForm.metWith,clientContact:cForm.clientContact,workCompleted:cForm.workCompleted.filter(l=>l.trim()),workRemaining:cForm.workRemaining.filter(l=>l.trim()),additionalNotes:cForm.additionalNotes?.trim()||null,signatureDataUrl:cForm.signatureDataUrl||null}:null;
         const completed={...job,status:"Completed",completedAt:now,completionReport:rpt};
-        if((cForm.photos||[]).length>0) save(`jc-photos-${job.id}`,cForm.photos);
+        if((cForm.photos||[]).length>0){const ok=save(`jc-photos-${job.id}`,cForm.photos);if(!ok)notify("Storage full — photos not saved","err");}
         setJobs(js=>js.map(j=>j.id===job.id?completed:j));
-        const pdfDoc=generatePDF(completed,rpt);
-        setCModal(null); setCTpl(null); notify("Jobcard complete — PDF saved");
-        sendEmail(completed,pdfDoc);
+        setCModal(null); setCTpl(null); notify("Jobcard complete");
+        if(emailCfg.endpointUrl&&completed.recipientEmail){const pdfDoc=generatePDF(completed,rpt);sendEmail(completed,pdfDoc);}
       };
 
       const pushNotify = async(title,body)=>{
@@ -1349,18 +1484,26 @@
       };
 
       const handleSignIn = async(em,pw)=>{
-        const h=await hashPw(pw,em);
-        const u=users.find(u=>u.email.toLowerCase()===em.toLowerCase()&&u.pwHash===h);
-        if(!u)return "Invalid email or password";
-        setSession({userId:u.id,email:u.email,name:u.name,isAdmin:u.isAdmin||false});
+        const candidate=users.find(u=>u.email.toLowerCase()===em.toLowerCase());
+        if(!candidate)return "Invalid email or password";
+        const salt=candidate.salt||em.toLowerCase();
+        const h=await hashPw(pw,salt);
+        if(candidate.pwHash!==h)return "Invalid email or password";
+        if(!candidate.salt){
+          const newSalt=genSalt();
+          const newHash=await hashPw(pw,newSalt);
+          setUsersStore(users.map(u=>u.id===candidate.id?{...u,salt:newSalt,pwHash:newHash}:u));
+        }
+        setSession({userId:candidate.id,email:candidate.email,name:candidate.name,isAdmin:candidate.isAdmin||false});
         requestNotifPerm();
         return null;
       };
       const handleRegister = async(em,nm,pw)=>{
         if(users.some(u=>u.email.toLowerCase()===em.toLowerCase()))return "Email already in use";
-        const h=await hashPw(pw,em);
+        const salt=genSalt();
+        const h=await hashPw(pw,salt);
         const isAdmin=users.length===0;
-        const nu={id:Date.now(),email:em,name:nm,pwHash:h,isAdmin};
+        const nu={id:Date.now(),email:em,name:nm,pwHash:h,salt,isAdmin};
         setUsersStore([...users,nu]);
         setSession({userId:nu.id,email:nu.email,name:nu.name,isAdmin});
         requestNotifPerm();
@@ -1368,151 +1511,28 @@
       };
       const handleSignOut=()=>setSession(null);
 
-      const ModeToggle=()=>(
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <div className="ws-toggle-track" onClick={()=>setDark(d=>!d)} role="switch" aria-checked={dark} tabIndex={0} onKeyDown={e=>e.key===" "&&setDark(d=>!d)}>
-            <div className={`ws-toggle-knob${dark?" on":""}`}/>
-          </div>
-          <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:9,letterSpacing:"0.14em",color:"var(--text-dim)",textTransform:"uppercase"}}>{dark?"Dark":"Light"}</span>
-        </div>
-      );
-
-      const TabNav=()=>(
-        <div className="tab-bar">
-          <button className={`tab-btn${tab==="list"?" active":""}`} onClick={()=>{setTab("list");setView("home");}}>LIST</button>
-          <button className={`tab-btn${tab==="calendar"?" active":""}`} onClick={()=>setTab("calendar")}>CALENDAR</button>
-          <button className={`tab-btn${tab==="reports"?" active":""}`} onClick={()=>setTab("reports")}>REPORTS</button>
-          <button className={`tab-btn${tab==="settings"?" active":""}`} onClick={()=>setTab("settings")}>ACCOUNT</button>
-        </div>
-      );
-
-      const CalendarView=()=>{
-        const days=calView==="week"?wkDays(calDate):[calDate];
-        const cols=days.length;
-        const now=new Date();
-        const nowPx=(now.getHours()*60+now.getMinutes()-CAL_HS*60)*(CAL_SH/60);
-        const showNow=now.getHours()>=CAL_HS&&now.getHours()<CAL_HE;
-        const DAY_ABB=["MON","TUE","WED","THU","FRI","SAT","SUN"];
-        const pLabel=calView==="day"
-          ?calDate.toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long",year:"numeric"})
-          :(()=>{const dd=wkDays(calDate);const f=dd[0],l=dd[6];const ma=f.toLocaleDateString("en-GB",{month:"short"}),mb=l.toLocaleDateString("en-GB",{month:"short"});return ma===mb?`${ma} ${f.getDate()}–${l.getDate()}, ${f.getFullYear()}`:`${ma} ${f.getDate()} – ${mb} ${l.getDate()}, ${f.getFullYear()}`;})();
-        const go=n=>{const d=new Date(calDate);d.setDate(d.getDate()+n*(calView==="week"?7:1));setCalDate(d);};
-        const ASGN_COLORS=["#374a6a","#4e6846","#8b7228","#8b3a2a","#7a6e5e"];
-        const aColor=name=>ASGN_COLORS[Math.max(0,assignees.indexOf(name))%ASGN_COLORS.length];
-        const evH=52;
-        const evTop=job=>{if(job.scheduledTime){const[h,m]=job.scheduledTime.split(":").map(Number);return(h+m/60-CAL_HS)*CAL_SH;}return CAL_EVT;};
-        const EventEl=({job,hideAssigneeName=false})=>{
-          const sc=SC[job.status];
-          return(
-            <div className="cal-event" style={{top:evTop(job),height:evH,background:sc.bg,border:`1px solid ${sc.border}`,color:sc.color,...(calMode==="team"?{borderLeft:`3px solid ${aColor(job.assignee)}`}:{})}}
-              onClick={e=>{e.stopPropagation();setSelId(job.id);setTab("list");setView("detail");}}>
-              <div className="cal-event-title">
-                {calMode==="team"&&!hideAssigneeName&&<span style={{color:aColor(job.assignee),fontWeight:700,marginRight:3,fontSize:8}}>{job.assignee.split(" ")[0]}</span>}
-                {job.scheduledTime&&<span style={{opacity:0.7,marginRight:4}}>{job.scheduledTime}</span>}
-                {job.title}
-              </div>
-              {evH>=28&&<div className="cal-event-sub">{job.location}</div>}
-            </div>
-          );
-        };
-        const activeCols=calMode==="team"?(teamAssignees.length>0?teamAssignees:assignees.filter(a=>a!=="Unassigned")):null;
-        return (
-          <div className="cal-wrap">
-            <div className="cal-toolbar">
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",flexWrap:"wrap",gap:12}}>
-                <div className="cal-nav">
-                  <button className="cal-nav-btn" onClick={()=>go(-1)}>‹ Prev</button>
-                  <button className="cal-nav-btn" onClick={()=>setCalDate(new Date())}>Today</button>
-                  <button className="cal-nav-btn" onClick={()=>go(1)}>Next ›</button>
-                </div>
-                <span className="cal-period">{pLabel}</span>
-                <div className="cal-view-toggle">
-                  <button className={`cal-view-btn${calView==="week"?" active":""}`} onClick={()=>setCalView("week")}>WEEK</button>
-                  <button className={`cal-view-btn${calView==="day"?" active":""}`} onClick={()=>setCalView("day")}>DAY</button>
-                </div>
-              </div>
-            </div>
-            {calMode==="team"&&calView==="day"&&activeCols&&activeCols.length>0?(
-              <div className="cal-grid-outer">
-                <div style={{display:"grid",gridTemplateColumns:`44px repeat(${activeCols.length},1fr)`,borderBottom:"1px solid var(--card-border)"}}>
-                  <div/>
-                  {activeCols.map(a=>(
-                    <div key={a} className="cal-day-hdr">
-                      <span className="cal-day-name">{a.split(" ")[0].toUpperCase()}</span>
-                      <span style={{width:8,height:8,borderRadius:"50%",background:aColor(a),display:"inline-block",marginTop:2}}/>
-                    </div>
-                  ))}
-                </div>
-                <div className="cal-scroll" ref={calScrollRef}>
-                  <div style={{display:"flex"}}>
-                    <div style={{width:44,flexShrink:0}}>
-                      {CAL_HOURS.map(h=><div key={h} className="cal-time-cell"><span className="cal-time-lbl">{h}:00</span></div>)}
-                    </div>
-                    {activeCols.map((aName,ci)=>{
-                      const assigneeJobs=calJobs.filter(j=>j.assignee===aName&&j.due===ds(calDate));
-                      return(
-                        <div key={ci} style={{flex:1,position:"relative",borderLeft:"1px solid var(--card-border)"}}>
-                          {CAL_HOURS.map(h=><div key={h} className="cal-slot" onClick={()=>openCalAdd(calDate,h,aName)}><div className="cal-slot-half"/></div>)}
-                          {assigneeJobs.map(job=><EventEl key={job.id} job={job} hideAssigneeName={true}/>)}
-                          {isToday(calDate)&&showNow&&<div className="cal-now-line" style={{top:nowPx}}><div className="cal-now-dot"/></div>}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            ):(
-              <div className="cal-grid-outer">
-                <div style={{display:"grid",gridTemplateColumns:`44px repeat(${cols},1fr)`,borderBottom:"1px solid var(--card-border)"}}>
-                  <div/>
-                  {days.map((d,i)=>(
-                    <div key={i} className={`cal-day-hdr${isToday(d)?" today":""}`}>
-                      <span className="cal-day-name">{calView==="week"?DAY_ABB[i]:d.toLocaleDateString("en-GB",{weekday:"short"}).toUpperCase()}</span>
-                      <span className={`cal-day-num${isToday(d)?" today-num":""}`}>{d.getDate()}</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="cal-scroll" ref={calScrollRef}>
-                  <div style={{display:"flex"}}>
-                    <div style={{width:44,flexShrink:0}}>
-                      {CAL_HOURS.map(h=><div key={h} className="cal-time-cell"><span className="cal-time-lbl">{h}:00</span></div>)}
-                    </div>
-                    {days.map((d,di)=>{
-                      const dStr=ds(d); const dayJobs=calJobs.filter(j=>j.due===dStr);
-                      return(
-                        <div key={di} style={{flex:1,position:"relative",borderLeft:"1px solid var(--card-border)"}}>
-                          {CAL_HOURS.map(h=><div key={h} className="cal-slot" onClick={()=>openCalAdd(d,h)}><div className="cal-slot-half"/></div>)}
-                          {dayJobs.map(job=><EventEl key={job.id} job={job}/>)}
-                          {isToday(d)&&showNow&&<div className="cal-now-line" style={{top:nowPx}}><div className="cal-now-dot"/></div>}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      };
 
       const pg={dark,offline,toast,showInstall,onInstall:triggerInstall,onDismissInstall:()=>setShowInstall(false)};
       const cm={cModal,cTpl,cForm,setCModal,setCTpl,setCForm,cErrs,setCErrs,submitComplete,templates,setTemplates,notify,setEditingTemplate};
 
       if(!session) return <SignIn users={users} onSignIn={handleSignIn} onRegister={handleRegister}/>;
 
+      const tnProps={tab,setTab,setView};
+      const calProps={calView,setCalView,calDate,setCalDate,calMode,calScrollRef,calJobs,assignees,teamAssignees,isToday,ds,wkDays,CAL_HS,CAL_HE,CAL_SH,CAL_HOURS,CAL_EVT,setSelId,setTab,setView,openCalAdd};
+
       /* CALENDAR */
       if(tab==="calendar"&&view!=="form") return (
         <Page {...pg}>
           <CModal {...cm}/>
-          <TabNav/>
-          <CalendarView/>
+          <TabNav {...tnProps}/>
+          <CalendarView {...calProps}/>
         </Page>
       );
 
       /* SETTINGS */
       if(tab==="settings") return (
         <Page {...pg}>
-          <TabNav/>
+          <TabNav {...tnProps}/>
           <div style={{maxWidth:520}}>
             {/* Sub-tab bar */}
             <div className="sub-tab-bar" style={{marginBottom:24}}>
@@ -1626,10 +1646,11 @@
                     if(!newAssignee.trim()) errs.name="Name required";
                     if(!newAssEmail.trim()) errs.email="Email required";
                     else if(users.some(u=>u.email.toLowerCase()===newAssEmail.trim().toLowerCase())) errs.email="Email already in use";
-                    if(!newAssPw.trim()||newAssPw.length<4) errs.pw="Password must be at least 4 characters";
+                    if(!newAssPw.trim()||newAssPw.length<8) errs.pw="Password must be at least 8 characters";
                     if(Object.keys(errs).length){setNewAssErr(errs);return;}
-                    const h=await hashPw(newAssPw,newAssEmail.trim());
-                    const nu={id:Date.now(),email:newAssEmail.trim(),name:newAssignee.trim(),pwHash:h,isAdmin:false};
+                    const salt=genSalt();
+                    const h=await hashPw(newAssPw,salt);
+                    const nu={id:Date.now(),email:newAssEmail.trim(),name:newAssignee.trim(),pwHash:h,salt,isAdmin:false};
                     setUsersStore([...users,nu]);
                     setAssignees([...assignees,newAssignee.trim()]);
                     setNewAssignee("");setNewAssEmail("");setNewAssPw("");setNewAssErr({});
@@ -1644,7 +1665,7 @@
               <div className="ws-card" style={{padding:"24px 28px",borderRadius:2,marginBottom:16}}>
                 <SL s={1}>Appearance</SL>
                 <div style={{display:"flex",alignItems:"center",gap:12}}>
-                  <ModeToggle/>
+                  <ModeToggle dark={dark} setDark={setDark}/>
                   <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:12,color:"var(--text-sec)",fontWeight:300}}>{dark?"Dark mode":"Light mode"}</span>
                 </div>
               </div>
@@ -1652,6 +1673,10 @@
               {session.isAdmin&&(
                 <div className="ws-card" style={{padding:"24px 28px",borderRadius:2,marginBottom:16}}>
                   <SL s={1}>Email / SMTP</SL>
+                  <div style={{display:"flex",gap:8,padding:"10px 14px",background:"rgba(139,114,40,0.08)",border:"1px solid rgba(139,114,40,0.25)",borderRadius:1,marginBottom:16}}>
+                    <span style={{color:"var(--ki)",flexShrink:0}}>⚠</span>
+                    <span style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,color:"var(--ki)",lineHeight:1.6,fontWeight:300}}>SMTP credentials are stored unencrypted in your browser's local storage. Use an app-specific password and avoid reusing a primary account password.</span>
+                  </div>
                   <div style={{display:"flex",flexDirection:"column",gap:14}}>
                     <FG label="Proxy Endpoint URL"><input className="ws-input" placeholder="https://….netlify.app/.netlify/functions/send-email" value={eCfg.endpointUrl||""} onChange={e=>setECfg(c=>({...c,endpointUrl:e.target.value}))}/></FG>
                     <FG label="Sender Display Name"><input className="ws-input" placeholder="JobFlow Notifications" value={eCfg.senderName||""} onChange={e=>setECfg(c=>({...c,senderName:e.target.value}))}/></FG>
@@ -1671,7 +1696,10 @@
                     </div>
                     <FG label="SMTP Username"><input className="ws-input" placeholder="your@email.com" value={eCfg.smtpUser||""} onChange={e=>setECfg(c=>({...c,smtpUser:e.target.value}))}/></FG>
                     <FG label="SMTP Password / App Password"><input type="password" className="ws-input" placeholder="••••••••••••" value={eCfg.smtpPass||""} onChange={e=>setECfg(c=>({...c,smtpPass:e.target.value}))}/></FG>
-                    <button className="ws-btn-primary" style={{alignSelf:"flex-start",fontSize:11,padding:"9px 20px",letterSpacing:"0.12em"}} onClick={()=>{setEmailCfg(eCfg);notify("Email settings saved");}}>Save</button>
+                    <div style={{display:"flex",gap:10}}>
+                      <button className="ws-btn-primary" style={{fontSize:11,padding:"9px 20px",letterSpacing:"0.12em"}} onClick={()=>{saveEmailCfg(eCfg);notify("Email settings saved");}}>Save</button>
+                      <button className="ws-btn-ghost" style={{fontSize:11,padding:"9px 16px"}} onClick={()=>setECfg({...EMAIL_CFG_DEF,...load("jc-email-config",{})})}>Revert</button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1719,7 +1747,7 @@
 
         return (
           <Page {...pg}>
-            <TabNav/>
+            <TabNav {...tnProps}/>
             {lightboxSrc&&<div className="photo-lightbox" onClick={()=>setLightboxSrc(null)}><img src={lightboxSrc} alt="Photo" onClick={e=>e.stopPropagation()}/><button onClick={()=>setLightboxSrc(null)} style={{position:"absolute",top:16,right:16,background:"none",border:"1px solid rgba(255,255,255,0.3)",color:"#fff",cursor:"pointer",padding:"6px 14px",borderRadius:1,fontFamily:"'Noto Sans JP',sans-serif",fontSize:11,letterSpacing:"0.08em"}}>× Close</button></div>}
             <div style={{marginBottom:36}}>
               <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.24em",color:"var(--text-dim)",marginBottom:10,fontWeight:300}}>ANALYTICS</div>
@@ -1765,7 +1793,7 @@
       if(view==="home") return (
         <Page {...pg}>
           <CModal {...cm}/>
-          <TabNav/>
+          <TabNav {...tnProps}/>
           <div style={{marginBottom:48}}>
             <div style={{marginBottom:6}}>
               <div style={{fontFamily:"'Noto Sans JP',sans-serif",fontSize:10,letterSpacing:"0.24em",color:"var(--text-dim)",marginBottom:12,fontWeight:300}}>JOBCARD MANAGEMENT</div>
@@ -1832,6 +1860,7 @@
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:36}}>
               <button className="ws-back" onClick={()=>setView("home")}>← Back</button>
               <div className="nav-actions" style={{display:"flex",alignItems:"center",gap:16}}>
+                {job.status==="Completed"&&<button className="ws-btn-ghost" onClick={()=>generatePDF(job,job.completionReport||null)} style={{fontSize:10,padding:"8px 14px"}}>↓ PDF</button>}
                 <button className="ws-btn-ghost" onClick={()=>openEdit(job)}>Edit</button>
                 <button className="ws-btn-danger" onClick={()=>setDelModal(true)}>Delete</button>
               </div>
@@ -1920,8 +1949,8 @@
           </div>
           <div className="ws-card" style={{padding:"32px 32px 28px",borderRadius:2,marginBottom:8}}>
             <div className="form-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:24,marginBottom:24}}>
-              <FG label="Quote / Invoice No." full><input className="ws-input" placeholder="e.g. INV-0042 or QT-2026-001…" value={form.invoiceNo||""} onChange={e=>sf("invoiceNo",e.target.value)}/></FG>
-              <FG label="Job Title" error={errs.title} full><input className="ws-input" placeholder="Describe the task…" value={form.title||""} onChange={e=>sf("title",e.target.value)} style={{borderColor:errs.title?"var(--aka)":undefined}}/></FG>
+              <FG label="Quote / Invoice No." full id="f-invoice"><input className="ws-input" placeholder="e.g. INV-0042 or QT-2026-001…" value={form.invoiceNo||""} onChange={e=>sf("invoiceNo",e.target.value)}/></FG>
+              <FG label="Job Title" error={errs.title} full id="f-title"><input className="ws-input" placeholder="Describe the task…" value={form.title||""} onChange={e=>sf("title",e.target.value)} style={{borderColor:errs.title?"var(--aka)":undefined}}/></FG>
               <FG label="Category"><EditableSelect value={form.category||cats[0]||""} onChange={v=>sf("category",v)} items={cats} onItemsChange={setCats}/></FG>
               <FG label="Priority"><CustomSelect value={form.priority||"Medium"} onChange={v=>sf("priority",v)} options={PRIS}/></FG>
               {edit&&<FG label="Status"><CustomSelect value={form.status||"Outstanding"} onChange={v=>sf("status",v)} options={STATS}/></FG>}
@@ -1930,8 +1959,8 @@
               <FG label="Due Date" error={errs.due}><DatePicker value={form.due||""} onChange={v=>sf("due",v)} hasError={!!errs.due}/></FG>
               <FG label="Scheduled Time"><ClockPicker value={form.scheduledTime||"09:00"} onChange={v=>sf("scheduledTime",v)}/></FG>
               <FG label="Contact Person" full><ContactSelect value={form.contact||{}} onChange={v=>sf("contact",v)} contacts={contacts} onContactsChange={setContacts} placeholder="Select or add contact…"/></FG>
-              <FG label="Report Recipient Email" full><input type="email" className="ws-input" placeholder="Send completion report to…" value={form.recipientEmail||""} onChange={e=>sf("recipientEmail",e.target.value)}/></FG>
-              <FG label="Notes" full><textarea className="ws-input" style={{minHeight:90,resize:"vertical"}} placeholder="Context, hazards, special instructions…" value={form.description||""} onChange={e=>sf("description",e.target.value)}/></FG>
+              <FG label="Report Recipient Email" full id="f-email"><input type="email" className="ws-input" placeholder="Send completion report to…" value={form.recipientEmail||""} onChange={e=>sf("recipientEmail",e.target.value)}/></FG>
+              <FG label="Notes" full id="f-notes"><textarea className="ws-input" style={{minHeight:90,resize:"vertical"}} placeholder="Context, hazards, special instructions…" value={form.description||""} onChange={e=>sf("description",e.target.value)}/></FG>
             </div>
             <BrushStroke variant={2} style={{marginBottom:24}}/>
             <div style={{display:"flex",justifyContent:"flex-end",gap:12}}>
