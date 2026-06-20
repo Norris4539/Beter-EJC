@@ -1976,8 +1976,8 @@
           </div>
           <div className="ws-card" style={{padding:"32px 32px 28px",borderRadius:2,marginBottom:8}}>
             <div className="form-grid" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:24,marginBottom:24}}>
-              <FG label="Quote / Invoice No." full id="f-invoice"><input className="ws-input" placeholder="e.g. INV-0042 or QT-2026-001…" value={form.invoiceNo||""} onChange={e=>sf("invoiceNo",e.target.value)}/></FG>
               <FG label="Job Title" error={errs.title} full id="f-title"><input className="ws-input" placeholder="Describe the task…" value={form.title||""} onChange={e=>sf("title",e.target.value)} style={{borderColor:errs.title?"var(--aka)":undefined}}/></FG>
+              <FG label="Quote / Invoice No." full id="f-invoice"><input className="ws-input" placeholder="e.g. INV-0042 or QT-2026-001…" value={form.invoiceNo||""} onChange={e=>sf("invoiceNo",e.target.value)}/></FG>
               <FG label="Category"><EditableSelect value={form.category||cats[0]||""} onChange={v=>sf("category",v)} items={cats} onItemsChange={setCats}/></FG>
               <FG label="Priority"><CustomSelect value={form.priority||"Medium"} onChange={v=>sf("priority",v)} options={PRIS}/></FG>
               {edit&&<FG label="Status"><CustomSelect value={form.status||"Outstanding"} onChange={v=>sf("status",v)} options={STATS}/></FG>}
