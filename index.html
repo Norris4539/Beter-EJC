@@ -218,6 +218,7 @@
         .user-admin-row:last-child{border-bottom:none;}
         .hov-danger{transition:color 0.15s;}.hov-danger:hover{color:var(--aka)!important;}
         .hov-pri{transition:color 0.15s;}.hov-pri:hover{color:var(--text-pri)!important;}
+        .cs-item.kb-active{background:var(--hover-bg);outline:2px solid var(--nori);outline-offset:-2px;}
         @media(max-width:600px){
           .rpt-bar-label{width:80px;}
           .tab-btn{padding:10px 12px;font-size:9px;}
@@ -350,20 +351,28 @@
     /* ── Stable components (outside App so input focus survives re-renders) ── */
     const CustomSelect = ({value, onChange, options, style}) => {
       const [open, setOpen] = useState(false);
+      const [activeIdx, setActiveIdx] = useState(-1);
       const ref = useRef(null);
       useClickOutside(ref, ()=>setOpen(false), open);
+      useEffect(()=>{if(!open)setActiveIdx(-1);},[open]);
       const opts=options.map(o=>typeof o==="string"?{value:o,label:o}:o);
       const sel=opts.find(o=>o.value===value)||opts[0];
+      const handleKey=e=>{
+        if(e.key==="ArrowDown"){e.preventDefault();if(!open){setOpen(true);setActiveIdx(0);}else setActiveIdx(i=>Math.min(i+1,opts.length-1));}
+        else if(e.key==="ArrowUp"){e.preventDefault();if(!open){setOpen(true);setActiveIdx(opts.length-1);}else setActiveIdx(i=>Math.max(i-1,0));}
+        else if(e.key==="Enter"&&open&&activeIdx>=0){e.preventDefault();onChange(opts[activeIdx].value);setOpen(false);}
+        else if(e.key==="Escape"){setOpen(false);}
+      };
       return (
         <div ref={ref} className="cs-wrap" style={style}>
-          <button className="cs-btn" onClick={()=>setOpen(o=>!o)}>
+          <button className="cs-btn" onClick={()=>setOpen(o=>!o)} onKeyDown={handleKey} aria-haspopup="listbox" aria-expanded={open}>
             <span>{sel?.label}</span>
             <svg width="10" height="6" viewBox="0 0 10 6" style={{transform:open?"rotate(180deg)":"none",transition:"transform 0.2s",flexShrink:0}}><polyline points="1,1 5,5 9,1" fill="none" stroke="var(--text-dim)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </button>
           {open&&(
-            <div className="cs-list">
-              {opts.map(o=>(
-                <div key={o.value} className={`cs-item${value===o.value?" sel":""}`} onClick={()=>{onChange(o.value);setOpen(false);}}>
+            <div className="cs-list" role="listbox">
+              {opts.map((o,idx)=>(
+                <div key={o.value} role="option" aria-selected={value===o.value} className={`cs-item${value===o.value?" sel":""}${activeIdx===idx?" kb-active":""}`} onClick={()=>{onChange(o.value);setOpen(false);}}>
                   {value===o.value&&<span style={{color:"var(--nori)",fontSize:11,flexShrink:0}}>✓</span>}
                   {o.label}
                 </div>
@@ -375,26 +384,35 @@
     };
 
     const EditableSelect = ({value, onChange, items, onItemsChange, placeholder="Select…"}) => {
-      const [open,setOpen]       = useState(false);
-      const [adding,setAdding]   = useState(false);
-      const [newItem,setNewItem] = useState("");
-      const [editIdx,setEditIdx] = useState(-1);
-      const [editVal,setEditVal] = useState("");
+      const [open,setOpen]         = useState(false);
+      const [adding,setAdding]     = useState(false);
+      const [newItem,setNewItem]   = useState("");
+      const [editIdx,setEditIdx]   = useState(-1);
+      const [editVal,setEditVal]   = useState("");
+      const [activeIdx,setActiveIdx] = useState(-1);
       const ref = useRef(null);
       useClickOutside(ref, ()=>{setOpen(false);setAdding(false);setEditIdx(-1);}, open);
+      useEffect(()=>{if(!open)setActiveIdx(-1);},[open]);
       const select=(item)=>{onChange(item);setOpen(false);setAdding(false);setEditIdx(-1);};
       const addItem=()=>{const v=newItem.trim();if(!v)return;const next=[...items,v];onItemsChange(next);onChange(v);setNewItem("");setAdding(false);setOpen(false);};
       const deleteItem=(e,idx)=>{e.stopPropagation();const next=items.filter((_,i)=>i!==idx);onItemsChange(next);if(items[idx]===value)onChange(next[0]||"");};
       const startEdit=(e,idx)=>{e.stopPropagation();setEditIdx(idx);setEditVal(items[idx]);};
       const saveEdit=(e)=>{e.stopPropagation();const v=editVal.trim();if(!v)return;const next=items.map((it,i)=>i===editIdx?v:it);onItemsChange(next);if(items[editIdx]===value)onChange(v);setEditIdx(-1);};
+      const handleKey=e=>{
+        if(editIdx!==-1)return;
+        if(e.key==="ArrowDown"){e.preventDefault();if(!open){setOpen(true);setActiveIdx(0);}else setActiveIdx(i=>Math.min(i+1,items.length-1));}
+        else if(e.key==="ArrowUp"){e.preventDefault();if(!open){setOpen(true);setActiveIdx(items.length-1);}else setActiveIdx(i=>Math.max(i-1,0));}
+        else if(e.key==="Enter"&&open&&activeIdx>=0&&editIdx===-1){e.preventDefault();select(items[activeIdx]);}
+        else if(e.key==="Escape"){setOpen(false);setAdding(false);setEditIdx(-1);}
+      };
       return (
         <div ref={ref} className="cs-wrap">
-          <button className="cs-btn" onClick={()=>{setOpen(o=>!o);setAdding(false);setEditIdx(-1);}}>
+          <button className="cs-btn" onClick={()=>{setOpen(o=>!o);setAdding(false);setEditIdx(-1);}} onKeyDown={handleKey} aria-haspopup="listbox" aria-expanded={open}>
             <span style={{color:value?"inherit":"var(--text-dim)"}}>{value||placeholder}</span>
             <svg width="10" height="6" viewBox="0 0 10 6" style={{transform:open?"rotate(180deg)":"none",transition:"transform 0.2s",flexShrink:0}}><polyline points="1,1 5,5 9,1" fill="none" stroke="var(--text-dim)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </button>
           {open&&(
-            <div className="cs-list">
+            <div className="cs-list" role="listbox">
               {items.map((item,idx)=>(
                 editIdx===idx?(
                   <div key={idx} className="cs-edit-row" onClick={e=>e.stopPropagation()}>
@@ -406,7 +424,7 @@
                     <button className="cs-item-action" onClick={e=>{e.stopPropagation();setEditIdx(-1);}} style={{opacity:1}}>✕</button>
                   </div>
                 ):(
-                  <div key={idx} className={`cs-item${value===item?" sel":""}`} style={{justifyContent:"space-between"}} onClick={()=>select(item)}>
+                  <div key={idx} role="option" aria-selected={value===item} className={`cs-item${value===item?" sel":""}${!adding&&activeIdx===idx?" kb-active":""}`} style={{justifyContent:"space-between"}} onClick={()=>select(item)}>
                     <span style={{display:"flex",alignItems:"center",gap:6,minWidth:0}}>
                       {value===item&&<span style={{color:"var(--nori)",fontSize:11,flexShrink:0}}>✓</span>}
                       <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item}</span>
@@ -437,13 +455,15 @@
     };
 
     const ContactSelect = ({value, onChange, contacts, onContactsChange, placeholder="Select contact…"}) => {
-      const [open,setOpen]    = useState(false);
-      const [adding,setAdding]= useState(false);
-      const [newC,setNewC]    = useState({name:"",phone:"",email:""});
-      const [editId,setEditId]= useState(null);
-      const [editC,setEditC]  = useState({});
+      const [open,setOpen]         = useState(false);
+      const [adding,setAdding]     = useState(false);
+      const [newC,setNewC]         = useState({name:"",phone:"",email:""});
+      const [editId,setEditId]     = useState(null);
+      const [editC,setEditC]       = useState({});
+      const [activeIdx,setActiveIdx] = useState(-1);
       const ref = useRef(null);
       useClickOutside(ref, ()=>{setOpen(false);setAdding(false);setEditId(null);}, open);
+      useEffect(()=>{if(!open)setActiveIdx(-1);},[open]);
       const select=c=>{onChange({name:c.name,phone:c.phone||"",email:c.email||""});setOpen(false);};
       const addContact=()=>{
         if(!newC.name.trim())return;
@@ -467,17 +487,24 @@
         if(value?.name===contacts.find(c=>c.id===editId)?.name) onChange({name:editC.name,phone:editC.phone||"",email:editC.email||""});
         setEditId(null);
       };
+      const handleKey=e=>{
+        if(editId!==null)return;
+        if(e.key==="ArrowDown"){e.preventDefault();if(!open){setOpen(true);setActiveIdx(0);}else setActiveIdx(i=>Math.min(i+1,contacts.length-1));}
+        else if(e.key==="ArrowUp"){e.preventDefault();if(!open){setOpen(true);setActiveIdx(contacts.length-1);}else setActiveIdx(i=>Math.max(i-1,0));}
+        else if(e.key==="Enter"&&open&&activeIdx>=0){e.preventDefault();select(contacts[activeIdx]);}
+        else if(e.key==="Escape"){setOpen(false);setAdding(false);setEditId(null);}
+      };
       const inp={className:"ws-input",style:{padding:"6px 10px",fontSize:12,marginBottom:0}};
       return (
         <div ref={ref} className="cs-wrap">
-          <button className="cs-btn" onClick={()=>{setOpen(o=>!o);setAdding(false);setEditId(null);}}>
+          <button className="cs-btn" onClick={()=>{setOpen(o=>!o);setAdding(false);setEditId(null);}} onKeyDown={handleKey} aria-haspopup="listbox" aria-expanded={open}>
             <span style={{color:value?.name?"inherit":"var(--text-dim)"}}>{value?.name||placeholder}</span>
             {value?.name&&<span style={{marginLeft:"auto",color:"var(--text-dim)",fontSize:11,lineHeight:1}} onClick={e=>{e.stopPropagation();onChange({name:"",phone:"",email:""});}}>✕</span>}
             <svg width="10" height="6" viewBox="0 0 10 6" style={{transform:open?"rotate(180deg)":"none",transition:"transform 0.2s",flexShrink:0}}><polyline points="1,1 5,5 9,1" fill="none" stroke="var(--text-dim)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </button>
           {open&&(
-            <div className="cs-list">
-              {contacts.map(c=>(
+            <div className="cs-list" role="listbox">
+              {contacts.map((c,idx)=>(
                 editId===c.id?(
                   <div key={c.id} className="cs-edit-row" onClick={e=>e.stopPropagation()} style={{flexDirection:"column",gap:5,padding:"10px 12px"}}>
                     <input {...inp} placeholder="Name *" value={editC.name} onChange={e=>setEditC(x=>({...x,name:e.target.value}))} autoFocus/>
@@ -489,7 +516,7 @@
                     </div>
                   </div>
                 ):(
-                  <div key={c.id} className={`cs-item${value?.name===c.name?" sel":""}`} style={{justifyContent:"space-between"}} onClick={()=>select(c)}>
+                  <div key={c.id} role="option" aria-selected={value?.name===c.name} className={`cs-item${value?.name===c.name?" sel":""}${activeIdx===idx?" kb-active":""}`} style={{justifyContent:"space-between"}} onClick={()=>select(c)}>
                     <span style={{display:"flex",flexDirection:"column",alignItems:"flex-start",minWidth:0,gap:1}}>
                       <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.name}</span>
                       {c.phone&&<span style={{fontSize:9,color:"var(--text-dim)",fontFamily:"'Noto Sans JP',sans-serif"}}>{c.phone}</span>}
@@ -1163,7 +1190,7 @@
         <button className={`tab-btn${tab==="list"?" active":""}`} onClick={()=>{setTab("list");setView("home");}}>LIST</button>
         <button className={`tab-btn${tab==="calendar"?" active":""}`} onClick={()=>setTab("calendar")}>CALENDAR</button>
         <button className={`tab-btn${tab==="reports"?" active":""}`} onClick={()=>setTab("reports")}>REPORTS</button>
-        <button className={`tab-btn${tab==="settings"?" active":""}`} onClick={()=>setTab("settings")}>ACCOUNT</button>
+        <button className={`tab-btn${tab==="account"?" active":""}`} onClick={()=>setTab("account")}>ACCOUNT</button>
       </div>
     );
 
@@ -1530,7 +1557,7 @@
       );
 
       /* SETTINGS */
-      if(tab==="settings") return (
+      if(tab==="account") return (
         <Page {...pg}>
           <TabNav {...tnProps}/>
           <div style={{maxWidth:520}}>
